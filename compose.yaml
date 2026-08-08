@@ -1,0 +1,12 @@
+services:
+  tests:
+    build: .
+    init: true
+    ipc: host
+    environment:
+      BASE_URL: ${BASE_URL:-https://www.saucedemo.com}
+      SAUCEDEMO_USERNAME: ${SAUCEDEMO_USERNAME:?Copy .env.example to .env}
+      SAUCEDEMO_PASSWORD: ${SAUCEDEMO_PASSWORD:?Copy .env.example to .env}
+    volumes:
+      - .:/app
+    command: pytest --browser chromium
