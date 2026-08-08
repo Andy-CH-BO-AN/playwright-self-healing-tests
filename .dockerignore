@@ -1,0 +1,11 @@
+.git
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+test-results
+playwright-report
+screenshots
+traces
+videos
+reports

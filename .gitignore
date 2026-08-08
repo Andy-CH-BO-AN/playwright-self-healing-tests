@@ -209,6 +209,26 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Playwright artifacts and browser binaries
+test-results/
+playwright-report/
+screenshots/
+traces/
+videos/
+reports/
+ms-playwright/
+playwright-browsers/
+
+# Temporary files
+.DS_Store
+*.tmp
+*.temp
+tmp/
+
+# Local environment overrides
+.env.*
+!.env.example
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
