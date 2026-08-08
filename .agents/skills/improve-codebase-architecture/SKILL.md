@@ -42,9 +42,9 @@ Report 必須完全離線可用：所有 CSS 直接寫入 `<style>`，所有 dia
 - **Files**：涉及檔案／module
 - **Problem**：現有 architecture 為何造成 friction
 - **Solution**：plain English 說明改變
-- **Benefits**：以 locality、leverage 與測試改善解釋
+- **Wins**：以 locality、leverage 與測試改善解釋
 - **Before / After diagram**：並排自繪，呈現 shallowness 與 deepening
-- **Recommendation strength**：`Strong`、`Worth exploring` 或 `Speculative` badge
+- **Recommendation strength**：`強烈建議`、`值得探索` 或 `推測性` badge
 
 結尾加入 **Top recommendation**：最先處理哪個 candidate 與原因。
 
