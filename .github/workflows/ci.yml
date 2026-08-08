@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -11,11 +13,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      SAUCEDEMO_USERNAME: ${{ secrets.SAUCEDEMO_USERNAME }}
+      SAUCEDEMO_PASSWORD: ${{ secrets.SAUCEDEMO_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v6
-      - name: Prepare test configuration
-        run: cp .env.example .env
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
