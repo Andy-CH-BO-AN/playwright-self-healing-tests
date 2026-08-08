@@ -20,7 +20,7 @@ description: 建立與精煉專案的 domain model。使用於釐清 domain term
 
 root 有 `CONTEXT-MAP.md` 時表示有多個 context；map 指向各自的 `CONTEXT.md` 與 `docs/adr/`，而 root `docs/adr/` 記錄 system-wide decision。
 
-僅在有內容可寫時才建立檔案：第一個 term 確定時才建立 `CONTEXT.md`；第一份 ADR 需要時才建立 `docs/adr/`。
+僅在有內容可寫時才建立檔案：第一個 term 確定時才建立 `CONTEXT.md`；第一份 ADR 需要時才建立對應 scope 的 `docs/adr/`。
 
 ## Session 中的行為
 
@@ -53,3 +53,5 @@ term 一確定立刻更新 `CONTEXT.md`，不可最後才批次整理；採用 [
 3. **是真實取捨的結果**：存在合理 alternative，並基於特定理由選擇。
 
 任一不符合就略過 ADR。採用 [ADR-FORMAT.md](./ADR-FORMAT.md) 格式。
+
+先決定 ADR scope：有 `CONTEXT-MAP.md` 時，context-specific decision 寫入該 bounded context 的 `docs/adr/`；只有跨 context 或 system-wide decision 才寫入 root `docs/adr/`。單一 context repo 則使用 root `docs/adr/`。

@@ -9,7 +9,7 @@ description: 掃描 codebase 的 deepening 機會，以視覺化 HTML report 呈
 
 此 command 必須以 project 的 domain model 為依據，並採用共通 design vocabulary：
 
-- 執行 `/codebase-design` skill，使用其 architecture vocabulary（**module**、**interface**、**depth**、**seam**、**adapter**、**leverage**、**locality**）及原則（deletion test、"the interface is the test surface"、"one adapter = hypothetical seam, two = real"）。每個 suggestion 必須精確使用這些詞；不可改用「component」、「service」、「API」或「boundary」。
+- 執行 `$codebase-design` skill，使用其 architecture vocabulary（**module**、**interface**、**depth**、**seam**、**adapter**、**leverage**、**locality**）及原則（deletion test、"the interface is the test surface"、"one adapter = hypothetical seam, two = real"）。每個 suggestion 必須精確使用這些詞；不可改用「component」、「service」、「API」或「boundary」。
 - `CONTEXT.md` 的 domain language 為良好 seam 命名；`docs/adr/` 的 ADR 記錄不可重新爭論的決策。
 
 ## 流程
@@ -48,7 +48,7 @@ Report 必須完全離線可用：所有 CSS 直接寫入 `<style>`，所有 dia
 
 結尾加入 **Top recommendation**：最先處理哪個 candidate 與原因。
 
-domain 以 `CONTEXT.md`，architecture 以 `/codebase-design` vocabulary 表達。若 `CONTEXT.md` 定義「Order」，寫「Order intake module」，不可寫「FooBarHandler」或「Order service」。
+domain 以 `CONTEXT.md`，architecture 以 `$codebase-design` vocabulary 表達。若 `CONTEXT.md` 定義「Order」，寫「Order intake module」，不可寫「FooBarHandler」或「Order service」。
 
 **ADR conflict**：只有 friction 真實到值得重開 ADR 時才呈現矛盾，且在 card 明確標記，例如：_「與 ADR-0007 矛盾，但值得重開，因為…」_。不可列出所有理論上被 ADR 排除的 refactor。
 
@@ -56,11 +56,11 @@ domain 以 `CONTEXT.md`，architecture 以 `/codebase-design` vocabulary 表達�
 
 ### 3. Grilling loop
 
-使用者選擇 candidate 後，執行 `/grilling` skill，依序釐清 constraint、dependency、deepened module 的 shape、seam 後的內容與存續測試。
+使用者選擇 candidate 後，執行 `$grilling` skill，依序釐清 constraint、dependency、deepened module 的 shape、seam 後的內容與存續測試。
 
-決策逐漸清楚時立刻產生 side effect，執行 `/domain-modeling` skill 以維護 domain model：
+決策逐漸清楚時立刻產生 side effect，執行 `$domain-modeling` skill 以維護 domain model：
 
 - deepened module 使用 `CONTEXT.md` 尚無的 concept 命名時，加入 term；僅在需要時建立檔案。
 - 對話中釐清模糊 term 時，立即更新 `CONTEXT.md`。
 - 使用者以可承重的理由否決 candidate 時，可問：「要不要將此記為 ADR，避免未來 architecture review 再次提出？」只有理由能避免未來探索者重提同一項時才提供；「目前不值得」等短暫或顯而易見原因不提供。
-- 想探索 deepened module 的 alternative interface 時，執行 `/codebase-design` skill，採用其 design-it-twice parallel sub-agent pattern。
+- 想探索 deepened module 的 alternative interface 時，執行 `$codebase-design` skill，採用其 design-it-twice parallel sub-agent pattern。

@@ -1,6 +1,12 @@
 # ADR 格式
 
-ADR 位於 `docs/adr/`，採連續編號：`0001-slug.md`、`0002-slug.md`。僅在第一份 ADR 需要時才建立目錄。
+ADR 必須依 scope 放置並在該目錄內採連續編號：`0001-slug.md`、`0002-slug.md`。
+
+- 單一 context repo：使用 root `docs/adr/`。
+- 有 `CONTEXT-MAP.md` 的 multi-context repo：context-specific decision 使用該 bounded context（與其 `CONTEXT.md` 同層）的 `docs/adr/`。
+- 只有跨 context 或 system-wide decision 使用 root `docs/adr/`。
+
+僅在該 scope 的第一份 ADR 需要時才建立目錄。
 
 ## Template
 
@@ -22,7 +28,7 @@ ADR 位於 `docs/adr/`，採連續編號：`0001-slug.md`、`0002-slug.md`。僅
 
 ## 編號
 
-掃描 `docs/adr/` 既有最高編號後加一。
+掃描選定 scope 的 `docs/adr/` 既有最高編號後加一。不可將 context-specific ADR 與 root system-wide ADR 混合編號。
 
 ## 何時提供 ADR
 

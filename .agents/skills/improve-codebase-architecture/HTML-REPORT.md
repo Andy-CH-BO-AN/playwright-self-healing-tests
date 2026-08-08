@@ -45,7 +45,7 @@ Architecture review 是寫入 OS temporary directory 的單一 self-contained HT
 
 ## Candidate card
 
-Diagram 承擔主要說明，prose 簡短、直白，並自然使用 `/codebase-design` glossary。每個 candidate 為一個 `<article class="card">`，包含：
+Diagram 承擔主要說明，prose 簡短、直白，並自然使用 `$codebase-design` glossary。每個 candidate 為一個 `<article class="card">`，包含：
 
 - **Title**：短標題，說明 deepening，例如「收斂 Order intake pipeline」。
 - **Badge row**：recommendation strength（`強烈建議` = emerald、`值得探索` = amber、`推測性` = slate）與 dependency category tag（`in-process`、`local-substitutable`、`ports & adapters`、`mock`）。
@@ -109,7 +109,7 @@ before 以 nested SVG box 呈現 function call tree；after 以一個粗邊框 b
 
 ## 語氣與詞彙
 
-使用繁體中文、簡潔表達；architecture noun 與 verb 必須來自 `/codebase-design` skill。必須精確使用：module、interface、implementation、depth、deep、shallow、seam、adapter、leverage、locality。
+使用繁體中文、簡潔表達；architecture noun 與 verb 必須來自 `$codebase-design` skill。必須精確使用：module、interface、implementation、depth、deep、shallow、seam、adapter、leverage、locality。
 
 不可替換：component、service、unit（指 module 時）、API、signature（指 interface 時）、boundary（指 seam 時）、layer／wrapper（實指 module 時）。
 
@@ -122,4 +122,4 @@ before 以 nested SVG box 呈現 function call tree；after 以一個粗邊框 b
 
 Wins bullet 應命名 glossary gain，例如「locality：bug 集中於一個 module」、「leverage：一個 interface，N 個 call site」、「interface 縮小；implementation 吸收 wrapper」。不可寫「更容易維護」或「更乾淨的 code」等沒有 glossary 價值的詞。
 
-不要 hedging、throat-clearing 或「值得注意的是」。句子可成為 bullet 就改為 bullet；bullet 可刪就刪；沒有 `/codebase-design` glossary 的詞時，優先使用其中既有詞，而不是新造詞。
+不要 hedging、throat-clearing 或「值得注意的是」。句子可成為 bullet 就改為 bullet；bullet 可刪就刪；沒有 `$codebase-design` glossary 的詞時，優先使用其中既有詞，而不是新造詞。
