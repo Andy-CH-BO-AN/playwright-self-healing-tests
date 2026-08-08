@@ -4,7 +4,7 @@
 
 ## 技術棧
 
-- Python 3.12
+- Python 3.14
 - pytest、pytest-playwright、Playwright Python、python-dotenv
 - Ruff
 - Docker Compose
@@ -35,7 +35,7 @@ tests/
 ## Local Setup
 
 ```bash
-python3.12 -m venv .venv
+python3.14 -m venv .venv
 source .venv/bin/activate
 cp .env.example .env
 python -m pip install --upgrade pip
@@ -60,7 +60,7 @@ BASE_URL=https://www.saucedemo.com pytest --browser chromium
 
 ## Docker
 
-Docker image 使用官方 Playwright Python `v1.61.0-noble` image，與 pinned Playwright Python package 版本一致。Local `.env` 不會被複製進 Docker image；Docker Compose 僅在執行時傳入需要的環境變數。
+Docker image 使用官方 Playwright Python `v1.61.0-resolute` image（Ubuntu 26.04 LTS），與 pinned Playwright Python package 版本一致，並將 local、CI 與 container runtime 對齊 Python 3.14。Local `.env` 不會被複製進 Docker image；Docker Compose 僅在執行時傳入需要的環境變數。
 
 ```bash
 docker compose run --rm tests
@@ -68,7 +68,7 @@ docker compose run --rm tests
 
 ## GitHub Actions
 
-Pull request 與 main branch push 會使用 Python 3.12 安裝 dependencies、Chromium、執行 Ruff 與 login testcase。CI 的 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` 由 GitHub Actions Secrets 注入；失敗時上傳 `test-results/`，供下載 screenshot 與 trace。
+Pull request 與 main branch push 會使用 Python 3.14 安裝 dependencies、Chromium、執行 Ruff 與 login testcase。CI 的 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` 由 GitHub Actions Secrets 注入；失敗時上傳 `test-results/`，供下載 screenshot 與 trace。
 
 ## Roadmap
 
