@@ -1,0 +1,3 @@
+interface:
+  display_name: "密集提問"
+  short_description: "以分回合提問壓力測試思考"

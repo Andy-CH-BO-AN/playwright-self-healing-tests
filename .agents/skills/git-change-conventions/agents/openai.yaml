@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git 變更慣例"
+  short_description: "套用 repository 的 branch、PR title 與詳盡 commit message 規則"
+  default_prompt: "branch 命名、PR title 或 commit message 需符合此 repository 的規範時，使用 $git-change-conventions。"
