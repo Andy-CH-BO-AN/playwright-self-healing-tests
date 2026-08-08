@@ -1,8 +1,6 @@
 ---
 name: handoff
 description: 將目前對話濃縮為可供下一位 agent 接手的交接文件。
-argument-hint: "下一個 session 會用來做什麼？"
-disable-model-invocation: true
 ---
 
 撰寫交接文件，摘要目前對話，讓新的 agent 能繼續工作。儲存至使用者 OS 的 temporary directory，不可寫入目前 workspace。

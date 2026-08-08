@@ -48,4 +48,4 @@ caveman（ultra）：
 ## 參考
 
 - [`SKILL.md`](./SKILL.md)：完整 LLM-facing instruction。
-- [Caveman README](../../README.md)：repository overview、install 與 benchmark。
+- [Caveman README](../../../README.md)：repository overview、install 與 benchmark。

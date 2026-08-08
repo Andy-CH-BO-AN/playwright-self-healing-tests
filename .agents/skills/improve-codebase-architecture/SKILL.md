@@ -1,7 +1,6 @@
 ---
 name: improve-codebase-architecture
 description: 掃描 codebase 的 deepening 機會，以視覺化 HTML report 呈現，並針對使用者選擇的項目進行 grilling。
-disable-model-invocation: true
 ---
 
 # 改善 Codebase Architecture
@@ -36,7 +35,7 @@ disable-model-invocation: true
 
 將 self-contained HTML 寫入 OS temporary directory，不可寫入 repo。由 `$TMPDIR` 取得 temp dir，否則採用 Linux `/tmp`、Windows `%TEMP%`；檔名為 `<tmpdir>/architecture-review-<timestamp>.html`，每次執行皆建立新檔。以 Linux `xdg-open <path>`、macOS `open <path>`、Windows `start <path>` 開啟，並回報 absolute path。
 
-Report 用 Tailwind CDN 排版與樣式；當 graph／flow／sequence 能可靠表達結構時，以 Mermaid CDN 畫圖。Mermaid 與手工 CSS／SVG 混用：graph-shaped relationship 用 Mermaid；mass diagram、cross-section、collapse animation 等偏 editorial 視覺用 div／SVG。每個 candidate 都要有 before／after visualisation。
+Report 必須完全離線可用：所有 CSS 直接寫入 `<style>`，所有 diagram 使用 inline SVG 或 HTML/CSS。不可載入 CDN、外部 script、外部 stylesheet、字型或 image。每個 candidate 都要有 before／after visualisation。
 
 每個 candidate card 包含：
 

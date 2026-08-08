@@ -1,6 +1,6 @@
-# HTML Report 格式
+# 離線 HTML Report 格式
 
-Architecture review 為單一 self-contained HTML，寫入 OS temporary directory。Tailwind 與 Mermaid 皆由 CDN 載入。Mermaid 適合 graph-shaped diagram；手工 div 與 inline SVG 適合 mass diagram、cross-section 等 editorial visual。兩者混用，避免所有 diagram 都長得一樣。
+Architecture review 是寫入 OS temporary directory 的單一 self-contained HTML。它必須在沒有 network、CDN、外部 script、external stylesheet、external font 或 image 的情況下可完整開啟與閱讀。所有 CSS 寫入 `<style>`；所有 diagram 使用 inline SVG 或 HTML/CSS；不可使用 Mermaid。
 
 ## Scaffold
 
@@ -9,23 +9,30 @@ Architecture review 為單一 self-contained HTML，寫入 OS temporary director
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Architecture review — {{repo name}}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
-    </script>
     <style>
-      /* Tailwind 無法清楚處理的少量自訂樣式：dashed seam、手繪感 arrow head 等。 */
-      .seam { stroke-dasharray: 4 4; }
-      .leak { stroke: #dc2626; }
-      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      :root { color: #172033; background: #f8fafc; font-family: system-ui, sans-serif; }
+      body { margin: 0; }
+      main { max-width: 1080px; margin: 0 auto; padding: 48px 24px; }
+      .stack { display: grid; gap: 28px; }
+      .card { padding: 24px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; }
+      .meta { color: #526074; font: 13px ui-monospace, monospace; }
+      .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+      .strong { color: #065f46; background: #d1fae5; }
+      .explore { color: #92400e; background: #fef3c7; }
+      .speculative { color: #475569; background: #e2e8f0; }
+      .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .diagram { min-height: 300px; padding: 16px; border: 1px solid #dbe3ef; border-radius: 8px; background: #f8fafc; }
+      .diagram svg { display: block; width: 100%; height: 280px; }
+      .warning { padding: 12px; border-radius: 8px; color: #92400e; background: #fffbeb; }
+      @media (max-width: 720px) { .comparison { grid-template-columns: 1fr; } }
     </style>
   </head>
-  <body class="bg-stone-50 text-slate-900 font-sans">
-    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+  <body>
+    <main class="stack">
       <header>...</header>
-      <section id="candidates" class="space-y-10">...</section>
+      <section id="candidates" class="stack">...</section>
       <section id="top-recommendation">...</section>
     </main>
   </body>
@@ -38,65 +45,63 @@ Architecture review 為單一 self-contained HTML，寫入 OS temporary director
 
 ## Candidate card
 
-Diagram 承擔主要說明，prose 簡短、直白，並自然使用 `/codebase-design` glossary。
-
-每個 candidate 為一個 `<article>`：
+Diagram 承擔主要說明，prose 簡短、直白，並自然使用 `/codebase-design` glossary。每個 candidate 為一個 `<article class="card">`，包含：
 
 - **Title**：短標題，說明 deepening，例如「收斂 Order intake pipeline」。
 - **Badge row**：recommendation strength（`強烈建議` = emerald、`值得探索` = amber、`推測性` = slate）與 dependency category tag（`in-process`、`local-substitutable`、`ports & adapters`、`mock`）。
-- **Files**：以 `font-mono text-sm` 顯示的 file list。
-- **Before / After diagram**：核心內容，兩欄並排；使用下列 pattern。
-- **Problem**：一句，描述問題。
-- **Solution**：一句，描述變更。
-- **Wins**：bullet，每項最多六個詞，例如「Test 只跨一個 interface」、「Pricing 不再跨 seam 泄漏」、「刪除 4 個 shallow wrapper」。
-- **ADR callout**：適用時以 amber-tinted box 顯示一行。
+- **Files**：以 `.meta` 顯示的 file list。
+- **Before / After diagram**：核心內容，以 `.comparison` 兩欄並排。
+- **Problem**、**Solution**：各一句。
+- **Wins**：bullet，每項最多六個詞。
+- **ADR callout**：適用時以 `.warning` 顯示一行。
 
 不可寫冗長說明 paragraph。若 diagram 需靠 paragraph 才能理解，重畫 diagram。
 
 ## Diagram pattern
 
-選擇最符合 candidate 的 pattern，可混用，不要讓每張圖看起來相同。
+只使用不需 JavaScript 的 inline SVG 或 HTML/CSS，選擇最符合 candidate 的 pattern，可混用。
 
-### Mermaid graph
+### Dependency／call flow
 
-dependency／call flow 適合 `flowchart` 或 `graph`，用於說明「X 呼叫 Y 呼叫 Z，結構混亂」。放在 Tailwind card 中，避免突兀；用 classDef 讓 leakage edge 為 red、deep module 為 dark。sequence diagram 適合呈現「before 6 round-trip；after 1」。
+以 inline SVG 的 `<rect>` 表示 module、`<line>` 或 `<path>` 表示 dependency。所有 marker、arrowhead、label 與 style 都定義在同一個 `<svg>` 裡。seam 使用 `stroke-dasharray="5 5"`，leakage 使用 `stroke="#dc2626"`。例如：
 
 ```html
-<div class="rounded-lg border border-slate-200 bg-white p-4">
-  <pre class="mermaid">
-    flowchart LR
-      A[OrderHandler] --> B[OrderValidator]
-      B --> C[OrderRepo]
-      C -.leak.-> D[PricingClient]
-      classDef leak stroke:#dc2626,stroke-width:2px;
-      class C,D leak
-  </pre>
-</div>
+<svg viewBox="0 0 520 280" role="img" aria-label="Order intake dependency flow">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#475569" />
+    </marker>
+  </defs>
+  <rect x="24" y="108" width="120" height="56" rx="8" fill="#fff" stroke="#475569" />
+  <text x="84" y="140" text-anchor="middle">OrderHandler</text>
+  <rect x="200" y="108" width="120" height="56" rx="8" fill="#fff" stroke="#475569" />
+  <text x="260" y="140" text-anchor="middle">OrderRepo</text>
+  <rect x="376" y="108" width="120" height="56" rx="8" fill="#fff" stroke="#dc2626" />
+  <text x="436" y="140" text-anchor="middle">PricingClient</text>
+  <line x1="144" y1="136" x2="200" y2="136" stroke="#475569" marker-end="url(#arrow)" />
+  <line x1="320" y1="136" x2="376" y2="136" stroke="#dc2626" marker-end="url(#arrow)" />
+</svg>
 ```
-
-### 手工 boxes-and-arrows
-
-Mermaid layout 不適合時，以有 border 與 label 的 `<div>` 表示 module，以 inline SVG `<line>` 或 `<path>` 絕對定位 arrow。after diagram 要呈現厚邊框 deep module、內部 faded module 時特別適用。
 
 ### Cross-section
 
-以水平 band（`h-12 border-l-4`）呈現 layered shallowness。before 顯示六層各自幾乎不做事；after 以一條 thick band 標示收斂後責任。
+以一組 inline SVG `<rect>` 堆疊 band 表示 layered shallowness。before 顯示多個 thin band；after 使用一條標示收斂責任的 thick band。
 
 ### Mass diagram
 
-每個 module 用兩個 rectangle：interface surface area 與 implementation。before：interface 幾乎同高，表現 shallow；after：interface 短、implementation 高，表現 deep。
+以兩個 SVG rectangle 表示每個 module 的 interface surface area 與 implementation。before 讓 interface 與 implementation 幾乎同高；after 讓 interface 短、implementation 高。
 
 ### Call-graph collapse
 
-before 用 nested box 呈現 function call tree；after 收斂為一個 box，原本 internal call 在其中淡化顯示。
+before 以 nested SVG box 呈現 function call tree；after 以一個粗邊框 box 包含 faded internal call。不要使用 JavaScript animation。
 
 ## Style guidance
 
-- 偏 editorial，不要 corporate dashboard；保留大量 whitespace；heading 可使用 serif（`font-serif`）。
+- 偏 editorial，不要 corporate dashboard；保留大量 whitespace；採用 system font，不下載 font。
 - 色彩節制：一個 accent（emerald 或 indigo），red 僅代表 leakage，amber 僅代表 warning。
 - diagram 約 320px 高，讓 before／after 可舒適並排。
-- module label 用 `text-xs uppercase tracking-wider`，呈現 schematic 而非 application UI。
-- 僅允許 Tailwind CDN 與 Mermaid ESM import；report 其餘內容必須 static，不加 app code 或 interactivity（Mermaid 本身除外）。
+- module label 需清晰、可在 SVG 直接閱讀。
+- HTML 必須無 network request；不得加入 `<script src>`、`<link href>`、`@import` 或 remote image URL。
 
 ## Top recommendation
 
@@ -104,9 +109,7 @@ before 用 nested box 呈現 function call tree；after 收斂為一個 box，�
 
 ## 語氣與詞彙
 
-使用繁體中文、簡潔表達；architecture noun 與 verb 必須來自 `/codebase-design` skill。簡潔不代表可偏離 glossary。
-
-必須精確使用：module、interface、implementation、depth、deep、shallow、seam、adapter、leverage、locality。
+使用繁體中文、簡潔表達；architecture noun 與 verb 必須來自 `/codebase-design` skill。必須精確使用：module、interface、implementation、depth、deep、shallow、seam、adapter、leverage、locality。
 
 不可替換：component、service、unit（指 module 時）、API、signature（指 interface 時）、boundary（指 seam 時）、layer／wrapper（實指 module 時）。
 
