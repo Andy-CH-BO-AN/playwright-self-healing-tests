@@ -28,3 +28,7 @@
 - `senior-sdet`：設計與實作可靠、可維護的 test automation。
 
 需要上述專長時，使用 `.codex/agents/` 中相對應的 custom agent。所有對使用者的敘述、文件與說明預設採繁體中文；程式碼、CLI、專有名詞與既有必要字串除外。
+
+## Repository Skills
+
+本專案共用 skills 位於 `.agents/skills/`，由 Codex 自動掃描。clone 或 pull 後重新啟動 Codex，即可在任何電腦使用相同 skill；不可將此專案專用 skill 安裝至使用者層級目錄。

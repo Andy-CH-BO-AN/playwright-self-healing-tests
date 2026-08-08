@@ -1,0 +1,5 @@
+interface:
+  display_name: "密集訪談"
+  short_description: "透過訪談磨練計畫"
+policy:
+  allow_implicit_invocation: false

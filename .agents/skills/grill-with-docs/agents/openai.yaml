@@ -1,0 +1,5 @@
+interface:
+  display_name: "訪談並建立文件"
+  short_description: "密集檢驗設計並同步撰寫文件"
+policy:
+  allow_implicit_invocation: false
