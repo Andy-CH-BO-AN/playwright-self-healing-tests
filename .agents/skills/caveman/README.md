@@ -25,7 +25,7 @@ Auto-clarity rule：遇到 security warning、irreversible-action confirmation�
 $caveman              # full（預設）
 $caveman lite         # 較輕壓縮
 $caveman ultra        # 極端壓縮
-$caveman wenyan       # 文言模式
+$caveman wenyan-full  # 文言模式
 $caveman off          # 回到一般模式
 ```
 
@@ -48,4 +48,4 @@ caveman（ultra）：
 ## 參考
 
 - [`SKILL.md`](./SKILL.md)：完整 LLM-facing instruction。
-- [Caveman README](../../../README.md)：repository overview、install 與 benchmark。
+- [Repository README](../../../README.md)：repository overview。
