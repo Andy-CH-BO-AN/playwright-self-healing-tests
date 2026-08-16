@@ -55,7 +55,9 @@ python -m playwright install chromium
 
 ## Run Tests
 
-### Serial Execution (Local Debug)
+### Native Local Debug
+
+本機環境快速開發與逐步除錯：
 
 ```bash
 ruff check .
@@ -63,7 +65,7 @@ ruff format --check .
 pytest --browser chromium
 ```
 
-### Parallel Execution (Standard / CI)
+或以 2 workers 本機平行執行：
 
 ```bash
 pytest --browser chromium -n 2
@@ -71,7 +73,6 @@ pytest --browser chromium -n 2
 
 - 平行執行透過 `pytest-xdist` 分派至 2 個 worker processes。
 - 每個 testcase 維持獨立 `BrowserContext` 與 Page 生命週期，確保 shopping cart 與 session state 互相隔離。
-- CI 預設使用 2 workers 執行完整 parallel suite。
 - 未指定 `-n` 時預設為 serial execution，便於 local 逐步除錯與單一測試執行。
 
 若需測試其他部署環境：
@@ -80,23 +81,46 @@ pytest --browser chromium -n 2
 BASE_URL=https://www.saucedemo.com pytest --browser chromium -n 2
 ```
 
-## Docker
+## Reproducible Container Execution
 
-Docker image 使用官方 Playwright Python `v1.61.0-resolute` image（Ubuntu 26.04 LTS），與 pinned Playwright Python package 版本一致，並將 local、CI 與 container runtime 對齊 Python 3.14。Local `.env` 不會被複製進 Docker image；Docker Compose 僅在執行時傳入需要的環境變數。
+Docker 作為此測試套件的 canonical reproducible execution environment。Container 內已包含完整的 source code 與 Playwright 執行環境，不依賴 host source bind mount。
+
+### Build Image
+
+```bash
+docker compose build tests
+```
+
+### Run Suite in Container
 
 ```bash
 docker compose run --rm tests
 ```
 
+- Container 預設以 2 workers 平行執行完整 suite (`pytest --browser chromium -n 2`)。
+- 程式碼修改後需透過 `docker compose build tests` 重新打包進 image。
+- 僅 `./test-results` 掛載至 host，確保測試失敗時的 screenshot 與 trace 能正常輸出至本機。
+- 執行 Ruff 檢查：
+  ```bash
+  docker compose run --rm tests ruff check .
+  docker compose run --rm tests ruff format --check .
+  ```
+
 ## GitHub Actions
 
-Pull request 與 main branch push 會使用 Python 3.14 安裝 dependencies、Chromium、執行 Ruff 與以 2 workers 平行執行完整 Playwright E2E suite (`pytest --browser chromium -n 2`)。CI 的 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` 由 GitHub Actions Secrets 注入；失敗時上傳 `test-results/`，供下載 screenshot 與 trace。
+Pull request 與 main branch push 均在 `ubuntu-24.04` runner 上以 Docker 容器化流程執行，與 local container 執行路徑完全一致：
+
+1. 建置 repository Docker image (`docker compose build tests`)。
+2. 在 container 內執行 Ruff 語法與排版檢查。
+3. 在 container 內以 2 workers 平行執行完整 Playwright E2E suite (`pytest --browser chromium -n 2`)。
+4. 測試失敗時，透過 volume mount 持久化至 runner 的 `test-results/` 並自動上傳為 artifact。
+5. GitHub Actions workflow 的 action dependencies (`actions/checkout`, `actions/upload-artifact`) 皆以 full commit SHA 固定，強化供應鏈安全。
 
 ## Roadmap
 
 - [x] Phase 1 — Framework + Login happy path
 - [x] Phase 2 — Core E2E scenarios
 - [x] Phase 3 — Parallel execution
-- [ ] Phase 4 — Docker / CI hardening
+- [x] Phase 4 — Docker / CI hardening
 - [ ] Phase 5 — AI-assisted self-healing + Draft PR automation
 
