@@ -33,7 +33,9 @@ class CheckoutOverviewPage:
 
     def item_by_name(self, name: str) -> OverviewItem:
         locator = self.items.filter(
-            has=self.page.locator("[data-test='inventory-item-name']", has_text=name)
+            has=self.page.locator("[data-test='inventory-item-name']").get_by_text(
+                name, exact=True
+            )
         )
         return OverviewItem(locator)
 

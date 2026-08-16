@@ -42,15 +42,11 @@ class InventoryPage:
 
     def item_by_name(self, name: str) -> InventoryItem:
         locator = self.items.filter(
-            has=self.page.locator("[data-test='inventory-item-name']", has_text=name)
+            has=self.page.locator("[data-test='inventory-item-name']").get_by_text(
+                name, exact=True
+            )
         )
         return InventoryItem(locator)
-
-    def add_to_cart(self, name: str) -> None:
-        self.item_by_name(name).add_to_cart()
-
-    def open_product(self, name: str) -> None:
-        self.item_by_name(name).open()
 
     def open_cart(self) -> None:
         self.shopping_cart_link.click()
