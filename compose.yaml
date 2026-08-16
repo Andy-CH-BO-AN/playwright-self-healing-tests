@@ -5,8 +5,7 @@ services:
     ipc: host
     environment:
       BASE_URL: ${BASE_URL:-https://www.saucedemo.com}
-      SAUCEDEMO_USERNAME: ${SAUCEDEMO_USERNAME:?Copy .env.example to .env}
-      SAUCEDEMO_PASSWORD: ${SAUCEDEMO_PASSWORD:?Copy .env.example to .env}
+      SAUCEDEMO_USERNAME: ${SAUCEDEMO_USERNAME:-}
+      SAUCEDEMO_PASSWORD: ${SAUCEDEMO_PASSWORD:-}
     volumes:
-      - .:/app
-    command: pytest --browser chromium
+      - ./test-results:/app/test-results
