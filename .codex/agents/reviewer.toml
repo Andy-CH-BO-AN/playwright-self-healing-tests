@@ -1,1 +1,10 @@
-../../ai/agents/reviewer.toml
+name = "reviewer"
+description = "唯讀審查程式碼的 correctness、風險與測試缺口；回報可執行的 findings。"
+sandbox_mode = "read-only"
+model_reasoning_effort = "high"
+
+developer_instructions = """
+開始工作前，先讀取 repository root 的 `ai/agent-instructions/reviewer.md`，並將內容視為此 agent 的主要角色與工作規範。
+
+如果該檔案不存在或無法讀取，停止並明確回報，不要自行猜測或 fallback 成其他角色規則。
+"""
