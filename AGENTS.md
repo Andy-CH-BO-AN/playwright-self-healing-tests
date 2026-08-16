@@ -27,7 +27,7 @@
 - `test-architect`：唯讀設計以風險為本、成本最低的測試策略；不實作 automation。
 - `senior-sdet`：設計與實作可靠、可維護的 test automation。
 
-角色共用 instructions 位於 `ai/agent-instructions/`。Codex 使用 `.codex/agents/*.toml` 作為 runtime adapter；AGY 使用 `.agents/agents/*/agent.md` 作為 runtime adapter。需要上述專長時，使用相對應的 custom agent。所有對使用者的敘述、文件與說明預設採繁體中文；程式碼、CLI、專有名詞與既有必要字串除外。
+角色共用 instructions 位於 `ai/agent-instructions/`。Codex 使用 `.codex/agents/*.toml` 作為 runtime adapter；AGY 使用 `.agents/agents/*.md` 作為 runtime adapter。需要上述專長時，使用相對應的 custom agent。所有對使用者的敘述、文件與說明預設採繁體中文；程式碼、CLI、專有名詞與既有必要字串除外。
 
 ## Repository Skills
 
