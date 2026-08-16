@@ -5,7 +5,7 @@
 ## 技術棧
 
 - Python 3.14
-- pytest、pytest-playwright、Playwright Python、python-dotenv
+- pytest、pytest-playwright、pytest-xdist、Playwright Python、python-dotenv
 - Ruff
 - Docker Compose
 - GitHub Actions
@@ -24,13 +24,21 @@
 config.py
 pages/
   authentication/login_page.py
-  inventory/inventory_page.py
+  cart/cart_page.py
+  checkout/
+    checkout_complete_page.py
+    checkout_information_page.py
+    checkout_overview_page.py
+  inventory/
+    inventory_page.py
+    product_detail_page.py
 tests/
   conftest.py
   authentication/test_login.py
+  cart/test_cart.py
+  checkout/test_checkout.py
+  inventory/test_product_details.py
 ```
-
-`inventory` 目前只有登入成功驗證所需 Page Object。`cart` 與 `checkout` 會在有對應 scenario 時建立。
 
 ## Local Setup
 
@@ -47,15 +55,29 @@ python -m playwright install chromium
 
 ## Run Tests
 
+### Serial Execution (Local Debug)
+
 ```bash
 ruff check .
+ruff format --check .
 pytest --browser chromium
 ```
+
+### Parallel Execution (Standard / CI)
+
+```bash
+pytest --browser chromium -n 2
+```
+
+- 平行執行透過 `pytest-xdist` 分派至 2 個 worker processes。
+- 每個 testcase 維持獨立 `BrowserContext` 與 Page 生命週期，確保 shopping cart 與 session state 互相隔離。
+- CI 預設使用 2 workers 執行完整 parallel suite。
+- 未指定 `-n` 時預設為 serial execution，便於 local 逐步除錯與單一測試執行。
 
 若需測試其他部署環境：
 
 ```bash
-BASE_URL=https://www.saucedemo.com pytest --browser chromium
+BASE_URL=https://www.saucedemo.com pytest --browser chromium -n 2
 ```
 
 ## Docker
@@ -68,12 +90,13 @@ docker compose run --rm tests
 
 ## GitHub Actions
 
-Pull request 與 main branch push 會使用 Python 3.14 安裝 dependencies、Chromium、執行 Ruff 與 login testcase。CI 的 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` 由 GitHub Actions Secrets 注入；失敗時上傳 `test-results/`，供下載 screenshot 與 trace。
+Pull request 與 main branch push 會使用 Python 3.14 安裝 dependencies、Chromium、執行 Ruff 與以 2 workers 平行執行完整 Playwright E2E suite (`pytest --browser chromium -n 2`)。CI 的 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` 由 GitHub Actions Secrets 注入；失敗時上傳 `test-results/`，供下載 screenshot 與 trace。
 
 ## Roadmap
 
-- Phase 1 — Framework + Login happy path
-- Phase 2 — Core E2E scenarios
-- Phase 3 — Parallel execution
-- Phase 4 — Docker / CI hardening
-- Phase 5 — AI-assisted self-healing + Draft PR automation
+- [x] Phase 1 — Framework + Login happy path
+- [x] Phase 2 — Core E2E scenarios
+- [x] Phase 3 — Parallel execution
+- [ ] Phase 4 — Docker / CI hardening
+- [ ] Phase 5 — AI-assisted self-healing + Draft PR automation
+
