@@ -1,4 +1,34 @@
+import re
+from decimal import Decimal
+
 from playwright.sync_api import Locator, Page
+
+
+def parse_price(text: str) -> Decimal:
+    match = re.search(r"\$([\d.]+)", text)
+    if not match:
+        raise ValueError(f"Could not extract monetary value from '{text}'")
+    return Decimal(match.group(1))
+
+
+class InventoryItem:
+    def __init__(self, locator: Locator) -> None:
+        self.root: Locator = locator
+        self.name: Locator = locator.locator("[data-test='inventory-item-name']")
+        self.description: Locator = locator.locator("[data-test='inventory-item-desc']")
+        self.price: Locator = locator.locator("[data-test='inventory-item-price']")
+        self.add_to_cart_button: Locator = locator.get_by_role(
+            "button", name="Add to cart"
+        )
+
+    def open(self) -> None:
+        self.name.click()
+
+    def add_to_cart(self) -> None:
+        self.add_to_cart_button.click()
+
+    def price_value(self) -> Decimal:
+        return parse_price(self.price.inner_text())
 
 
 class InventoryPage:
@@ -10,16 +40,17 @@ class InventoryPage:
         )
         self.items: Locator = page.locator("[data-test='inventory-item']")
 
-    def item_by_name(self, name: str) -> Locator:
-        return self.items.filter(
+    def item_by_name(self, name: str) -> InventoryItem:
+        locator = self.items.filter(
             has=self.page.locator("[data-test='inventory-item-name']", has_text=name)
         )
+        return InventoryItem(locator)
 
     def add_to_cart(self, name: str) -> None:
-        self.item_by_name(name).get_by_role("button", name="Add to cart").click()
+        self.item_by_name(name).add_to_cart()
 
     def open_product(self, name: str) -> None:
-        self.item_by_name(name).locator("[data-test='inventory-item-name']").click()
+        self.item_by_name(name).open()
 
     def open_cart(self) -> None:
         self.shopping_cart_link.click()
