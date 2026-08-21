@@ -2,8 +2,6 @@ from decimal import Decimal
 
 from playwright.sync_api import Page, expect
 
-from config import Settings
-from pages.authentication.login_page import LoginPage
 from pages.cart.cart_page import CartPage
 from pages.checkout.checkout_complete_page import CheckoutCompletePage
 from pages.checkout.checkout_information_page import CheckoutInformationPage
@@ -14,16 +12,12 @@ PRODUCT_A = "Sauce Labs Backpack"
 PRODUCT_B = "Sauce Labs Bike Light"
 
 
-def test_user_can_complete_checkout(page: Page, settings: Settings) -> None:
-    login_page = LoginPage(page)
-    inventory_page = InventoryPage(page)
-    cart_page = CartPage(page)
-    checkout_info_page = CheckoutInformationPage(page)
-    checkout_overview_page = CheckoutOverviewPage(page)
-    checkout_complete_page = CheckoutCompletePage(page)
-
-    login_page.open(settings.base_url)
-    login_page.log_in(settings.standard_user.username, settings.standard_user.password)
+def test_user_can_complete_checkout(logged_in_page: Page) -> None:
+    inventory_page = InventoryPage(logged_in_page)
+    cart_page = CartPage(logged_in_page)
+    checkout_info_page = CheckoutInformationPage(logged_in_page)
+    checkout_overview_page = CheckoutOverviewPage(logged_in_page)
+    checkout_complete_page = CheckoutCompletePage(logged_in_page)
 
     inventory_item = inventory_page.item_by_name(PRODUCT_A)
     expected_name = inventory_item.name.inner_text()
@@ -58,16 +52,12 @@ def test_user_can_complete_checkout(page: Page, settings: Settings) -> None:
 
 
 def test_checkout_calculates_multiple_products_correctly(
-    page: Page, settings: Settings
+    logged_in_page: Page,
 ) -> None:
-    login_page = LoginPage(page)
-    inventory_page = InventoryPage(page)
-    cart_page = CartPage(page)
-    checkout_info_page = CheckoutInformationPage(page)
-    checkout_overview_page = CheckoutOverviewPage(page)
-
-    login_page.open(settings.base_url)
-    login_page.log_in(settings.standard_user.username, settings.standard_user.password)
+    inventory_page = InventoryPage(logged_in_page)
+    cart_page = CartPage(logged_in_page)
+    checkout_info_page = CheckoutInformationPage(logged_in_page)
+    checkout_overview_page = CheckoutOverviewPage(logged_in_page)
 
     item_a = inventory_page.item_by_name(PRODUCT_A)
     item_b = inventory_page.item_by_name(PRODUCT_B)

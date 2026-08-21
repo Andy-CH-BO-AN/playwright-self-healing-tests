@@ -1,7 +1,5 @@
 from playwright.sync_api import Page, expect
 
-from config import Settings
-from pages.authentication.login_page import LoginPage
 from pages.cart.cart_page import CartPage
 from pages.inventory.inventory_page import InventoryPage
 from pages.inventory.product_detail_page import ProductDetailPage
@@ -10,14 +8,10 @@ TARGET_PRODUCT = "Sauce Labs Backpack"
 
 
 def test_product_added_from_inventory_appears_in_cart(
-    page: Page, settings: Settings
+    logged_in_page: Page,
 ) -> None:
-    login_page = LoginPage(page)
-    inventory_page = InventoryPage(page)
-    cart_page = CartPage(page)
-
-    login_page.open(settings.base_url)
-    login_page.log_in(settings.standard_user.username, settings.standard_user.password)
+    inventory_page = InventoryPage(logged_in_page)
+    cart_page = CartPage(logged_in_page)
 
     inventory_item = inventory_page.item_by_name(TARGET_PRODUCT)
     expected_name = inventory_item.name.inner_text()
@@ -34,15 +28,11 @@ def test_product_added_from_inventory_appears_in_cart(
 
 
 def test_product_added_from_detail_appears_in_cart(
-    page: Page, settings: Settings
+    logged_in_page: Page,
 ) -> None:
-    login_page = LoginPage(page)
-    inventory_page = InventoryPage(page)
-    detail_page = ProductDetailPage(page)
-    cart_page = CartPage(page)
-
-    login_page.open(settings.base_url)
-    login_page.log_in(settings.standard_user.username, settings.standard_user.password)
+    inventory_page = InventoryPage(logged_in_page)
+    detail_page = ProductDetailPage(logged_in_page)
+    cart_page = CartPage(logged_in_page)
 
     inventory_item = inventory_page.item_by_name(TARGET_PRODUCT)
     expected_name = inventory_item.name.inner_text()
