@@ -1,20 +1,14 @@
 from playwright.sync_api import Page, expect
 
-from config import Settings
-from pages.authentication.login_page import LoginPage
 from pages.inventory.inventory_page import InventoryPage
 from pages.inventory.product_detail_page import ProductDetailPage
 
 TARGET_PRODUCT = "Sauce Labs Backpack"
 
 
-def test_product_details_match_inventory(page: Page, settings: Settings) -> None:
-    login_page = LoginPage(page)
-    inventory_page = InventoryPage(page)
-    detail_page = ProductDetailPage(page)
-
-    login_page.open(settings.base_url)
-    login_page.log_in(settings.standard_user.username, settings.standard_user.password)
+def test_product_details_match_inventory(logged_in_page: Page) -> None:
+    inventory_page = InventoryPage(logged_in_page)
+    detail_page = ProductDetailPage(logged_in_page)
 
     inventory_item = inventory_page.item_by_name(TARGET_PRODUCT)
     expected_name = inventory_item.name.inner_text()
