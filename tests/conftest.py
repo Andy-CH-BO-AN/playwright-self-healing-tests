@@ -1,6 +1,5 @@
 import json
 import re
-import traceback
 from collections.abc import Callable
 from pathlib import Path
 
@@ -49,25 +48,6 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
             evidence_dir = Path("test-results/self-heal") / slug
             evidence_dir.mkdir(parents=True, exist_ok=True)
 
-            error_type = ""
-            error_message = ""
-            tb_str = ""
-
-            if call.excinfo is not None:
-                error_type = getattr(
-                    call.excinfo.type, "__name__", str(call.excinfo.type)
-                )
-                error_message = str(call.excinfo.value)
-                tb_str = "".join(
-                    traceback.format_exception(
-                        call.excinfo.type,
-                        call.excinfo.value,
-                        call.excinfo.tb,
-                    )
-                )
-            elif report.longrepr:
-                tb_str = str(report.longrepr)
-
             page: Page | None = None
             if hasattr(item, "funcargs"):
                 for arg in item.funcargs.values():
@@ -87,9 +67,13 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
             failure_data = {
                 "nodeid": report.nodeid,
                 "phase": report.when,
-                "error_type": error_type,
-                "error_message": error_message,
-                "traceback": tb_str,
+                "error_type": (
+                    getattr(call.excinfo.type, "__name__", "") if call.excinfo else ""
+                ),
+                "error_message": (str(call.excinfo.value) if call.excinfo else ""),
+                "traceback": getattr(
+                    report, "longreprtext", str(report.longrepr or "")
+                ),
                 "url": url,
             }
 

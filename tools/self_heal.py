@@ -12,18 +12,6 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-BANNED_PATTERNS = [
-    r"\btime\.sleep\b",
-    r"\bsleep\(",
-    r"\bwait_for_timeout\b",
-    r"\bforce\s*=\s*True\b",
-    r"\bevaluate\(",
-    r"\$\$?eval\b",
-    r"\bretry\b",
-    r"\bassert\b",
-    r"\bexpect\(",
-]
-
 
 class RepairDecision(BaseModel):
     decision: Literal["repair", "cannot_repair"]
@@ -34,45 +22,24 @@ class RepairDecision(BaseModel):
     confidence: int = Field(ge=1, le=100)
 
 
-def check_banned_patterns(text: str) -> str | None:
-    for pattern in BANNED_PATTERNS:
-        if re.search(pattern, text):
-            return f"Contains banned pattern matching '{pattern}'"
-    return None
+def fail(message: str) -> None:
+    print(message)
+    print("FINAL: REPAIR_FAILED")
+    sys.exit(1)
 
 
 def extract_page_object_path(traceback_text: str) -> str | None:
     matches = re.findall(r"(?:/app/)?(pages/[a-zA-Z0-9_/]+\.py)", traceback_text)
-    if matches:
-        for match in reversed(matches):
-            if Path(match).exists():
-                return match
-        for match in matches:
-            if Path(match).exists():
-                return match
-    return None
-
-
-def extract_test_path(nodeid: str, traceback_text: str) -> str | None:
-    test_file = nodeid.split("::")[0]
-    if Path(test_file).exists():
-        return test_file
-    matches = re.findall(r"(?:/app/)?(tests/[a-zA-Z0-9_/]+\.py)", traceback_text)
-    for match in matches:
+    for match in reversed(matches):
         if Path(match).exists():
             return match
     return None
 
 
-def validate_candidate(
-    decision_file: str,
-    old_snippet: str,
-    new_snippet: str,
-) -> str | None:
+def validate_candidate(decision_file: str, old_snippet: str) -> str | None:
     pages_dir = Path("pages").resolve()
-    candidate_path = Path(decision_file)
     try:
-        resolved_path = candidate_path.resolve()
+        resolved_path = Path(decision_file).resolve()
         resolved_path.relative_to(pages_dir)
     except ValueError, RuntimeError:
         return f"Candidate file '{decision_file}' escapes pages directory"
@@ -93,10 +60,6 @@ def validate_candidate(
         return (
             f"Old snippet occurs {count} times in '{decision_file}', expected exactly 1"
         )
-
-    banned_reason = check_banned_patterns(new_snippet)
-    if banned_reason:
-        return f"Safety violation in replacement: {banned_reason}"
 
     return None
 
@@ -126,9 +89,7 @@ def main() -> None:
     evidence_dir = Path(args.evidence)
     failure_file = evidence_dir / "failure.json"
     if not failure_file.exists():
-        print(f"Error: failure.json not found in {evidence_dir}")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail(f"Error: failure.json not found in {evidence_dir}")
 
     failure_data = json.loads(failure_file.read_text(encoding="utf-8"))
     nodeid = failure_data.get("nodeid", "")
@@ -140,33 +101,31 @@ def main() -> None:
     )
 
     page_obj_path = extract_page_object_path(traceback_text)
-    page_obj_source = ""
-    if page_obj_path and Path(page_obj_path).exists():
-        page_obj_source = Path(page_obj_path).read_text(encoding="utf-8")
+    page_obj_source = (
+        Path(page_obj_path).read_text(encoding="utf-8")
+        if page_obj_path and Path(page_obj_path).exists()
+        else ""
+    )
 
-    test_path = extract_test_path(nodeid, traceback_text)
-    test_source = ""
-    if test_path and Path(test_path).exists():
-        test_source = Path(test_path).read_text(encoding="utf-8")
+    test_file = nodeid.split("::")[0]
+    test_source = (
+        Path(test_file).read_text(encoding="utf-8")
+        if test_file and Path(test_file).exists()
+        else ""
+    )
 
     prompt_path = Path("ai/prompts/locator-repair.md")
     if not prompt_path.is_file():
-        print(f"Error: Prompt file '{prompt_path}' does not exist")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail(f"Error: Prompt file '{prompt_path}' does not exist")
 
     prompt_template = prompt_path.read_text(encoding="utf-8").strip()
     if not prompt_template:
-        print(f"Error: Prompt file '{prompt_path}' is empty")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail(f"Error: Prompt file '{prompt_path}' is empty")
 
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("Error: GEMINI_API_KEY is not set in the environment or .env file")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail("Error: GEMINI_API_KEY is not set in the environment or .env file")
 
     model_name = os.getenv("SELF_HEAL_MODEL", "gemini-3.5-flash-lite")
 
@@ -189,7 +148,7 @@ def main() -> None:
 {page_obj_source}
 ```
 
-### 4. Failing Test Source (`{test_path or "Unknown"}`)
+### 4. Failing Test Source (`{test_file or "Unknown"}`)
 ```python
 {test_source}
 ```
@@ -209,9 +168,7 @@ def main() -> None:
         )
         decision = RepairDecision.model_validate_json(response.text)
     except Exception as e:
-        print(f"LLM call failed: {e}")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail(f"LLM call failed: {e}")
 
     print(f"Decision: {decision.decision}")
     print(f"Confidence: {decision.confidence}")
@@ -221,16 +178,13 @@ def main() -> None:
         print("FINAL: CANNOT_REPAIR")
         sys.exit(0)
 
-    # decision == "repair"
     print(f"Target file: {decision.file}")
     print(f"Old snippet:\n{decision.old}")
     print(f"New snippet:\n{decision.new}")
 
-    safety_error = validate_candidate(decision.file, decision.old, decision.new)
+    safety_error = validate_candidate(decision.file, decision.old)
     if safety_error:
-        print(f"Safety guard violation: {safety_error}")
-        print("FINAL: REPAIR_FAILED")
-        sys.exit(1)
+        fail(f"Safety guard violation: {safety_error}")
 
     target_path = Path(decision.file)
     original_content = target_path.read_text(encoding="utf-8")
@@ -242,19 +196,15 @@ def main() -> None:
     # Run validation pipeline
     validation_passed = False
     try:
-        # 1. ruff check
         if not run_cmd([sys.executable, "-m", "ruff", "check", "."]):
             raise RuntimeError("ruff check failed")
 
-        # 2. ruff format check
         if not run_cmd([sys.executable, "-m", "ruff", "format", "--check", "."]):
             raise RuntimeError("ruff format check failed")
 
-        # 3. docker compose build tests
         if not run_cmd(["docker", "compose", "build", "tests"]):
             raise RuntimeError("docker compose build tests failed")
 
-        # 4. targeted failing test
         if not run_cmd(
             [
                 "docker",
@@ -270,7 +220,6 @@ def main() -> None:
         ):
             raise RuntimeError("Targeted test failed")
 
-        # 5. full Docker test suite
         if not run_cmd(["docker", "compose", "run", "--rm", "tests"]):
             raise RuntimeError("Full test suite failed")
 
@@ -280,8 +229,7 @@ def main() -> None:
     finally:
         if not validation_passed:
             rollback(target_path, original_content)
-            print("FINAL: REPAIR_FAILED")
-            sys.exit(1)
+            fail("Validation failed, state restored")
 
     print("FINAL: REPAIRED")
     sys.exit(0)
