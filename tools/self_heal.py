@@ -41,7 +41,7 @@ def validate_candidate(decision_file: str, old_snippet: str) -> str | None:
     try:
         resolved_path = Path(decision_file).resolve()
         resolved_path.relative_to(pages_dir)
-    except ValueError, RuntimeError:
+    except ValueError:
         return f"Candidate file '{decision_file}' escapes pages directory"
 
     if not resolved_path.is_file() or resolved_path.suffix != ".py":
@@ -193,41 +193,26 @@ def main() -> None:
     print(f"Applying patch to {target_path}...")
     target_path.write_text(new_content, encoding="utf-8")
 
-    # Run validation pipeline
-    validation_passed = False
-    try:
-        if not run_cmd([sys.executable, "-m", "ruff", "check", "."]):
-            raise RuntimeError("ruff check failed")
+    commands = [
+        [sys.executable, "-m", "ruff", "check", "."],
+        [sys.executable, "-m", "ruff", "format", "--check", "."],
+        ["docker", "compose", "build", "tests"],
+        [
+            "docker",
+            "compose",
+            "run",
+            "--rm",
+            "tests",
+            "pytest",
+            nodeid,
+            "--browser",
+            "chromium",
+        ],
+        ["docker", "compose", "run", "--rm", "tests"],
+    ]
 
-        if not run_cmd([sys.executable, "-m", "ruff", "format", "--check", "."]):
-            raise RuntimeError("ruff format check failed")
-
-        if not run_cmd(["docker", "compose", "build", "tests"]):
-            raise RuntimeError("docker compose build tests failed")
-
-        if not run_cmd(
-            [
-                "docker",
-                "compose",
-                "run",
-                "--rm",
-                "tests",
-                "pytest",
-                nodeid,
-                "--browser",
-                "chromium",
-            ]
-        ):
-            raise RuntimeError("Targeted test failed")
-
-        if not run_cmd(["docker", "compose", "run", "--rm", "tests"]):
-            raise RuntimeError("Full test suite failed")
-
-        validation_passed = True
-    except Exception as e:
-        print(f"Validation error: {e}")
-    finally:
-        if not validation_passed:
+    for command in commands:
+        if not run_cmd(command):
             rollback(target_path, original_content)
             fail("Validation failed, state restored")
 

@@ -81,8 +81,10 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
                 json.dumps(failure_data, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+            page_html_path = evidence_dir / "page.html"
+            page_html_path.unlink(missing_ok=True)
             if html_content:
-                (evidence_dir / "page.html").write_text(
+                page_html_path.write_text(
                     html_content,
                     encoding="utf-8",
                 )
