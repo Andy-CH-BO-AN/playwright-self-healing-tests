@@ -159,7 +159,14 @@ def _apply_and_validate_repair(decision: RepairDecision, nodeid: str) -> None:
     print(f"Applying patch to {target_path}...")
     target_path.write_text(new_content, encoding="utf-8")
 
-    commands = [
+    for command in _validation_commands(nodeid):
+        if not run_cmd(command):
+            rollback(target_path, original_content)
+            fail("Validation failed, state restored")
+
+
+def _validation_commands(nodeid: str) -> list[list[str]]:
+    return [
         [sys.executable, "-m", "ruff", "check", "."],
         [sys.executable, "-m", "ruff", "format", "--check", "."],
         ["docker", "compose", "build", "tests"],
@@ -176,11 +183,6 @@ def _apply_and_validate_repair(decision: RepairDecision, nodeid: str) -> None:
         ],
         ["docker", "compose", "run", "--rm", "tests"],
     ]
-
-    for command in commands:
-        if not run_cmd(command):
-            rollback(target_path, original_content)
-            fail("Validation failed, state restored")
 
 
 def fail(message: str) -> None:
