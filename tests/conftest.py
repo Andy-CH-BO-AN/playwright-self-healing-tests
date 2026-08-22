@@ -42,51 +42,65 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     outcome = yield
     report = outcome.get_result()
 
-    if report.failed and report.when in ("setup", "call"):
+    if not _should_capture_failure(report):
+        return
+
+    try:
+        page = _find_page(item)
+        _save_failure_evidence(report, call, page)
+    except Exception:
+        pass
+
+
+def _should_capture_failure(report: pytest.TestReport) -> bool:
+    return report.failed and report.when in ("setup", "call")
+
+
+def _find_page(item: pytest.Item) -> Page | None:
+    if hasattr(item, "funcargs"):
+        for arg in item.funcargs.values():
+            if isinstance(arg, Page):
+                return arg
+    return None
+
+
+def _save_failure_evidence(
+    report: pytest.TestReport,
+    call: pytest.CallInfo,
+    page: Page | None,
+) -> None:
+    slug = re.sub(r"[^\w\-.]+", "_", report.nodeid).strip("_")
+    evidence_dir = Path("test-results/self-heal") / slug
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    url = ""
+    html_content = ""
+    if page is not None:
         try:
-            slug = re.sub(r"[^\w\-.]+", "_", report.nodeid).strip("_")
-            evidence_dir = Path("test-results/self-heal") / slug
-            evidence_dir.mkdir(parents=True, exist_ok=True)
-
-            page: Page | None = None
-            if hasattr(item, "funcargs"):
-                for arg in item.funcargs.values():
-                    if isinstance(arg, Page):
-                        page = arg
-                        break
-
-            url = ""
-            html_content = ""
-            if page is not None:
-                try:
-                    url = page.url
-                    html_content = page.content()
-                except Exception:
-                    pass
-
-            failure_data = {
-                "nodeid": report.nodeid,
-                "phase": report.when,
-                "error_type": (
-                    getattr(call.excinfo.type, "__name__", "") if call.excinfo else ""
-                ),
-                "error_message": (str(call.excinfo.value) if call.excinfo else ""),
-                "traceback": getattr(
-                    report, "longreprtext", str(report.longrepr or "")
-                ),
-                "url": url,
-            }
-
-            (evidence_dir / "failure.json").write_text(
-                json.dumps(failure_data, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            page_html_path = evidence_dir / "page.html"
-            page_html_path.unlink(missing_ok=True)
-            if html_content:
-                page_html_path.write_text(
-                    html_content,
-                    encoding="utf-8",
-                )
+            url = page.url
+            html_content = page.content()
         except Exception:
             pass
+
+    failure_data = {
+        "nodeid": report.nodeid,
+        "phase": report.when,
+        "error_type": (
+            getattr(call.excinfo.type, "__name__", "") if call.excinfo else ""
+        ),
+        "error_message": (str(call.excinfo.value) if call.excinfo else ""),
+        "traceback": getattr(report, "longreprtext", str(report.longrepr or "")),
+        "url": url,
+    }
+
+    (evidence_dir / "failure.json").write_text(
+        json.dumps(failure_data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    page_html_path = evidence_dir / "page.html"
+    page_html_path.unlink(missing_ok=True)
+    if html_content:
+        page_html_path.write_text(
+            html_content,
+            encoding="utf-8",
+        )
