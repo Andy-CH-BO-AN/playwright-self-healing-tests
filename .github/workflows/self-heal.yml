@@ -244,7 +244,7 @@ jobs:
           branch="fix/self-heal-${SOURCE_RUN_ID}"
           existing_pr=$(gh pr list \
             --repo "$GITHUB_REPOSITORY" \
-            --head "${GITHUB_REPOSITORY_OWNER}:${branch}" \
+            --head "$branch" \
             --state all \
             --limit 1 \
             --json url \
