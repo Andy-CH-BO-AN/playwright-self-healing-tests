@@ -2,88 +2,130 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Literal
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
+MAX_ROUNDS = 3
+
 
 class RepairDecision(BaseModel):
-    decision: Literal["repair", "cannot_repair"]
-    file: str = Field(default="")
-    old: str = Field(default="")
-    new: str = Field(default="")
-    reason: str = Field(default="")
+    file: str
+    old: str
+    new: str
+    reason: str
     confidence: int = Field(ge=1, le=100)
 
 
+class RepairPlan(BaseModel):
+    repairs: list[RepairDecision]
+
+
 def main() -> None:
-    evidence_dir = _parse_evidence_dir()
-    failure_data = _load_failure_data(evidence_dir)
-    user_prompt = _build_repair_prompt(evidence_dir, failure_data)
-    decision = _request_repair_decision(user_prompt)
+    initial_evidence_root = _parse_evidence_dir()
+    current_evidence_root = initial_evidence_root
 
-    print(f"Decision: {decision.decision}")
-    print(f"Confidence: {decision.confidence}")
-    print(f"Reason: {decision.reason}")
+    for round_number in range(1, MAX_ROUNDS + 1):
+        print(f"\n=== Repair Round {round_number}/{MAX_ROUNDS} ===")
+        failure_dirs = _find_failure_dirs(current_evidence_root)
+        if not failure_dirs:
+            print(f"No failure evidence found in {current_evidence_root}.")
+            break
 
-    if decision.decision == "cannot_repair":
+        print(f"Loaded {len(failure_dirs)} failure(s) from {current_evidence_root}.")
+        user_prompt = _build_repair_prompt(failure_dirs)
+        plan = _request_repair_plan(user_prompt)
+
+        print(f"Received repair plan with {len(plan.repairs)} candidate(s).")
+        applied_count = 0
+        for i, repair in enumerate(plan.repairs, 1):
+            print(f"  Candidate {i}: {repair.file} (confidence: {repair.confidence})")
+            print(f"  Reason: {repair.reason}")
+            safety_error = validate_candidate(repair.file, repair.old)
+            if safety_error:
+                print(f"  Skipping invalid candidate: {safety_error}")
+                continue
+
+            _apply_single_patch(repair.file, repair.old, repair.new)
+            applied_count += 1
+            print(f"  Applied repair to {repair.file}")
+
+        if applied_count == 0:
+            print("No valid repairs could be applied in this round; stopping loop.")
+            break
+
+        _run_static_checks()
+        _clear_test_evidence()
+
+        print("Rebuilding Docker image...")
+        if not run_cmd(["docker", "compose", "build", "tests"]):
+            fail("Docker build failed after applying repair")
+
+        print("Running full serial E2E test suite...")
+        tests_passed = run_cmd(
+            [
+                "docker",
+                "compose",
+                "run",
+                "--rm",
+                "tests",
+                "pytest",
+                "--browser",
+                "chromium",
+            ]
+        )
+
+        if tests_passed:
+            print("All E2E tests passed!")
+            print("FINAL: REPAIRED")
+            sys.exit(0)
+
+        latest_evidence_root = Path("test-results/self-heal")
+        if not _find_failure_dirs(latest_evidence_root):
+            fail("E2E failed but produced no failure evidence")
+
+        print("E2E tests still have failures; proceeding to next round if available.")
+        current_evidence_root = latest_evidence_root
+
+    if _has_valid_page_object_diff():
+        print("FINAL: PARTIAL_REPAIR")
+        sys.exit(0)
+    else:
         print("FINAL: CANNOT_REPAIR")
         sys.exit(0)
 
-    _apply_and_validate_repair(decision, failure_data.get("nodeid", ""))
-
-    print("FINAL: REPAIRED")
-    sys.exit(0)
-
 
 def _parse_evidence_dir() -> Path:
-    parser = argparse.ArgumentParser(description="AI-assisted locator repair")
+    parser = argparse.ArgumentParser(
+        description="Iterative multi-failure locator repair"
+    )
     parser.add_argument(
         "--evidence",
         required=True,
-        help="Path to failure evidence directory (containing failure.json)",
+        help="Path to failure evidence directory or root containing failures",
     )
     args = parser.parse_args()
-    return Path(args.evidence)
+    path = Path(args.evidence)
+    if not path.exists():
+        fail(f"Evidence path '{path}' does not exist")
+    return path
 
 
-def _load_failure_data(evidence_dir: Path) -> dict:
-    failure_file = evidence_dir / "failure.json"
-    if not failure_file.exists():
-        fail(f"Error: failure.json not found in {evidence_dir}")
+def _find_failure_dirs(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    if (root / "failure.json").is_file():
+        return [root]
+    return sorted({p.parent for p in root.rglob("failure.json")})
 
-    return json.loads(failure_file.read_text(encoding="utf-8"))
 
-
-def _build_repair_prompt(evidence_dir: Path, failure_data: dict) -> str:
-    nodeid = failure_data.get("nodeid", "")
-    traceback_text = failure_data.get("traceback", "")
-
-    page_html_file = evidence_dir / "page.html"
-    page_html = (
-        page_html_file.read_text(encoding="utf-8") if page_html_file.exists() else ""
-    )
-
-    page_obj_path = extract_page_object_path(traceback_text)
-    page_obj_source = (
-        Path(page_obj_path).read_text(encoding="utf-8")
-        if page_obj_path and Path(page_obj_path).exists()
-        else ""
-    )
-
-    test_file = nodeid.split("::")[0]
-    test_source = (
-        Path(test_file).read_text(encoding="utf-8")
-        if test_file and Path(test_file).exists()
-        else ""
-    )
-
+def _build_repair_prompt(failure_dirs: list[Path]) -> str:
     prompt_path = Path("ai/prompts/locator-repair.md")
     if not prompt_path.is_file():
         fail(f"Error: Prompt file '{prompt_path}' does not exist")
@@ -92,33 +134,66 @@ def _build_repair_prompt(evidence_dir: Path, failure_data: dict) -> str:
     if not prompt_template:
         fail(f"Error: Prompt file '{prompt_path}' is empty")
 
-    return f"""{prompt_template}
+    sections = [prompt_template, "\n## Actual Failure Context\n"]
 
-## Actual Failure Context
+    for i, f_dir in enumerate(failure_dirs, 1):
+        failure_file = f_dir / "failure.json"
+        if not failure_file.exists():
+            continue
 
-### 1. Failure Evidence (`failure.json`)
+        failure_data = json.loads(failure_file.read_text(encoding="utf-8"))
+        nodeid = failure_data.get("nodeid", "")
+        traceback_text = failure_data.get("traceback", "")
+
+        page_html_file = f_dir / "page.html"
+        page_html = (
+            page_html_file.read_text(encoding="utf-8")
+            if page_html_file.exists()
+            else ""
+        )
+
+        page_obj_path = extract_page_object_path(traceback_text)
+        page_obj_source = (
+            Path(page_obj_path).read_text(encoding="utf-8")
+            if page_obj_path and Path(page_obj_path).exists()
+            else ""
+        )
+
+        test_file = nodeid.split("::")[0]
+        test_source = (
+            Path(test_file).read_text(encoding="utf-8")
+            if test_file and Path(test_file).exists()
+            else ""
+        )
+
+        section = f"""### Failure {i} (`{nodeid or "Unknown"}`)
+
+#### 1. Failure Evidence (`failure.json`)
 ```json
 {json.dumps(failure_data, indent=2, ensure_ascii=False)}
 ```
 
-### 2. DOM Snapshot (`page.html`)
+#### 2. DOM Snapshot (`page.html`)
 ```html
 {page_html}
 ```
 
-### 3. Target Page Object Source (`{page_obj_path or "Unknown"}`)
+#### 3. Target Page Object Source (`{page_obj_path or "Unknown"}`)
 ```python
 {page_obj_source}
 ```
 
-### 4. Failing Test Source (`{test_file or "Unknown"}`)
+#### 4. Failing Test Source (`{test_file or "Unknown"}`)
 ```python
 {test_source}
 ```
 """
+        sections.append(section)
+
+    return "\n".join(sections)
 
 
-def _request_repair_decision(user_prompt: str) -> RepairDecision:
+def _request_repair_plan(user_prompt: str) -> RepairPlan:
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -134,55 +209,75 @@ def _request_repair_decision(user_prompt: str) -> RepairDecision:
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=RepairDecision,
+                response_schema=RepairPlan,
                 temperature=0.1,
             ),
         )
-        return RepairDecision.model_validate_json(response.text)
+        return RepairPlan.model_validate_json(response.text)
     except Exception as e:
         fail(f"LLM call failed: {e}")
 
 
-def _apply_and_validate_repair(decision: RepairDecision, nodeid: str) -> None:
-    print(f"Target file: {decision.file}")
-    print(f"Old snippet:\n{decision.old}")
-    print(f"New snippet:\n{decision.new}")
-
-    safety_error = validate_candidate(decision.file, decision.old)
-    if safety_error:
-        fail(f"Safety guard violation: {safety_error}")
-
-    target_path = Path(decision.file)
+def _apply_single_patch(file_path: str, old_snippet: str, new_snippet: str) -> None:
+    target_path = Path(file_path)
     original_content = target_path.read_text(encoding="utf-8")
-    new_content = original_content.replace(decision.old, decision.new, 1)
-
-    print(f"Applying patch to {target_path}...")
+    new_content = original_content.replace(old_snippet, new_snippet, 1)
     target_path.write_text(new_content, encoding="utf-8")
 
-    for command in _validation_commands(nodeid):
-        if not run_cmd(command):
-            rollback(target_path, original_content)
-            fail("Validation failed, state restored")
 
-
-def _validation_commands(nodeid: str) -> list[list[str]]:
-    return [
+def _run_static_checks() -> None:
+    print("Running static quality checks...")
+    commands = [
         [sys.executable, "-m", "ruff", "check", "."],
         [sys.executable, "-m", "ruff", "format", "--check", "."],
-        ["docker", "compose", "build", "tests"],
-        [
-            "docker",
-            "compose",
-            "run",
-            "--rm",
-            "tests",
-            "pytest",
-            nodeid,
-            "--browser",
-            "chromium",
-        ],
-        ["docker", "compose", "run", "--rm", "tests"],
+        ["git", "diff", "--check"],
     ]
+    for cmd in commands:
+        if not run_cmd(cmd):
+            fail(f"Static check failed: {' '.join(cmd)}")
+
+    if not _has_valid_page_object_diff():
+        fail("Safety check failed: unexpected changes outside pages/**/*.py")
+
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+    )
+    if untracked.stdout.strip():
+        fail(
+            "Safety check failed: untracked files detected:\n"
+            f"{untracked.stdout.strip()}"
+        )
+
+
+def _clear_test_evidence() -> None:
+    evidence_dir = Path("test-results/self-heal")
+    if evidence_dir.exists():
+        shutil.rmtree(evidence_dir, ignore_errors=True)
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _has_valid_page_object_diff() -> bool:
+    res = subprocess.run(
+        ["git", "diff", "--name-only"],
+        capture_output=True,
+        text=True,
+    )
+    changed = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+    if not changed:
+        return False
+
+    pages_dir = Path("pages").resolve()
+    for file in changed:
+        try:
+            resolved = Path(file).resolve()
+            resolved.relative_to(pages_dir)
+            if resolved.suffix != ".py":
+                return False
+        except ValueError:
+            return False
+    return True
 
 
 def fail(message: str) -> None:
@@ -208,9 +303,7 @@ def validate_candidate(decision_file: str, old_snippet: str) -> str | None:
         return f"Candidate file '{decision_file}' escapes pages directory"
 
     if not resolved_path.is_file() or resolved_path.suffix != ".py":
-        return (
-            f"Candidate file '{decision_file}' is not an existing Python file in pages"
-        )
+        return f"Candidate '{decision_file}' is not an existing Python file in pages"
 
     if not old_snippet:
         return "Old snippet is empty"
@@ -231,13 +324,6 @@ def run_cmd(cmd: list[str]) -> bool:
     print(f"Executing: {' '.join(cmd)}")
     result = subprocess.run(cmd)
     return result.returncode == 0
-
-
-def rollback(target_path: Path, original_content: str) -> None:
-    print(f"Rolling back changes to {target_path}...")
-    target_path.write_text(original_content, encoding="utf-8")
-    print("Rebuilding Docker image after rollback...")
-    subprocess.run(["docker", "compose", "build", "tests"])
 
 
 if __name__ == "__main__":
