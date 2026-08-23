@@ -1,4 +1,5 @@
 import argparse
+import ast
 import json
 import os
 import re
@@ -152,19 +153,27 @@ def _build_repair_prompt(failure_dirs: list[Path]) -> str:
             else ""
         )
 
-        page_obj_path = extract_page_object_path(traceback_text)
-        page_obj_source = (
-            Path(page_obj_path).read_text(encoding="utf-8")
-            if page_obj_path and Path(page_obj_path).exists()
-            else ""
-        )
-
         test_file = nodeid.split("::")[0]
         test_source = (
             Path(test_file).read_text(encoding="utf-8")
             if test_file and Path(test_file).exists()
             else ""
         )
+
+        page_object_paths = set(_find_page_object_imports(test_file))
+        traceback_page = extract_page_object_path(traceback_text)
+        if traceback_page:
+            page_object_paths.add(Path(traceback_page))
+
+        page_object_sections = []
+        for path in sorted(page_object_paths):
+            page_object_sections.append(
+                f"""##### `{path}`
+```python
+{path.read_text(encoding="utf-8")}
+```"""
+            )
+        page_object_context = "\n\n".join(page_object_sections) or "(none found)"
 
         section = f"""### Failure {i} (`{nodeid or "Unknown"}`)
 
@@ -178,10 +187,8 @@ def _build_repair_prompt(failure_dirs: list[Path]) -> str:
 {page_html}
 ```
 
-#### 3. Target Page Object Source (`{page_obj_path or "Unknown"}`)
-```python
-{page_obj_source}
-```
+#### 3. Relevant Page Object Sources
+{page_object_context}
 
 #### 4. Failing Test Source (`{test_file or "Unknown"}`)
 ```python
@@ -191,6 +198,31 @@ def _build_repair_prompt(failure_dirs: list[Path]) -> str:
         sections.append(section)
 
     return "\n".join(sections)
+
+
+def _find_page_object_imports(test_file: str) -> list[Path]:
+    test_path = Path(test_file)
+    if not test_file or not test_path.is_file():
+        return []
+
+    tree = ast.parse(test_path.read_text(encoding="utf-8"))
+    paths: set[Path] = set()
+
+    for node in ast.walk(tree):
+        modules: list[str] = []
+        if isinstance(node, ast.ImportFrom) and node.module:
+            modules.append(node.module)
+        elif isinstance(node, ast.Import):
+            modules.extend(alias.name for alias in node.names)
+
+        for module in modules:
+            if not module.startswith("pages."):
+                continue
+            path = Path(module.replace(".", "/") + ".py")
+            if path.is_file():
+                paths.add(path)
+
+    return sorted(paths)
 
 
 def _request_repair_plan(user_prompt: str) -> RepairPlan:
