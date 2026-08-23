@@ -26,18 +26,23 @@ This repository automates that maintenance loop while keeping engineers firmly i
 
 ```mermaid
 flowchart TD
-    A[Scheduled E2E Failure] --> B[Failure Evidence & AST Context\nJSON + DOM + Page Objects]
-    B --> C[AI Repair Loop\nUp to 3 Iterative Rounds]
-    C --> D{Outcome Classification}
-    D -->|All Tests Passed| E[REPAIRED\nPublish Draft PR]
-    D -->|Unresolved with Progress| F[PARTIAL_REPAIR\nDraft PR + Human Handoff]
-    D -->|No Valid Candidates| G[CANNOT_REPAIR\nNo PR Created]
-    D -->|Error / Broken Evidence| H[REPAIR_FAILED\nWorkflow Failure]
-    E --> I[Human Review & Merge]
-    F --> I
+    A[Scheduled E2E Failure] --> B[Capture Failure Evidence\nJSON + DOM + Test Source]
+    B --> C[Discover Relevant Page Objects\nTraceback + Test AST Imports]
+    C --> D[AI Diagnosis & Repair Proposal\nGemini Structured Output]
+    D --> E[Mechanical Safety Validation\nScope strictly pages/**/*.py]
+    E --> F[Full Serial E2E Regression\nin Docker Container]
+    F -->|Still Failing & Round < 3| B
+    F --> G{Outcome Classification}
+    D -->|Invalid / No Proposal| G
+    G -->|All Tests Passed| H[REPAIRED\nPublish Draft PR]
+    G -->|Unresolved with Progress| I[PARTIAL_REPAIR\nDraft PR + Human Handoff]
+    G -->|No Valid Candidates| J[CANNOT_REPAIR\nNo PR Created]
+    G -->|Fatal Error / Broken Evidence| K[REPAIR_FAILED\nWorkflow Failure]
+    H --> L[Human Review & Merge]
+    I --> L
 ```
 
-> **Summary**: When scheduled E2E tests fail, failure evidence and AST-discovered Page Objects are gathered into diagnosis context. The system runs an iterative AI repair loop (up to 3 rounds with fresh evidence), classifies the outcome, and publishes a Draft PR when safe repairs are available for human review.
+> **Summary**: When scheduled E2E tests fail, failure evidence and AST-discovered Page Objects are gathered into diagnosis context. The AI proposes minimal locator candidates, mechanical safety checks validate the patches, full containerized E2E regression verifies the changes (retrying up to 3 rounds with fresh evidence), and the outcome is classified to publish a Draft PR for human review.
 
 ---
 
