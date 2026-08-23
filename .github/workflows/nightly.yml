@@ -1,6 +1,7 @@
 name: Scheduled E2E Monitor
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
       timezone: "Asia/Taipei"
