@@ -15,7 +15,7 @@ Inspect all supplied failures. If multiple independent locator drifts have suffi
 對於每個提供的 Failure Context：
 1. **Failure Evidence（`failure.json`）**：testcase nodeid、failure phase（setup / call）、error type、error message、traceback、失敗當下的 page URL。
 2. **DOM Snapshot（`page.html`）**：失敗當下 `page.content()` 保存的 HTML snapshot，用於判斷目前頁面實際存在的 element、text、role、label、placeholder、attributes、stable test identifiers、element relationships。
-3. **Target Page Object Source**：traceback 所涉及之 Page Object 的完整 Python source。
+3. **Relevant Page Object Sources**：traceback 所涉及的 Page Object，加上 failing test 直接 import 的 `pages.*` modules。這些 source 是本次可考慮的 Page Object repair context。
 4. **Failing Test Source**（若可取得）：用於理解測試目的、使用者操作意圖、預期 business outcome。
 
 可分析 testcase 與 assertion 以理解 root cause，但不能將它們作為 repair candidate 的修改目標。
@@ -24,7 +24,7 @@ Inspect all supplied failures. If multiple independent locator drifts have suffi
 
 ## 分析原則
 
-綜合 failure error / traceback、失敗當下 DOM、Target Page Object source、testcase intent，判斷真正的 root cause。
+綜合 failure error / traceback、失敗當下 DOM、Relevant Page Object Sources、testcase intent，判斷真正的 root cause。
 
 常見可修復情境（不限於此）：Locator 過期；accessible name、visible text、label / placeholder、stable test identifier 改變；Page Object 使用了已不再適合目前 DOM 的 locator；局部且明確的 UI interaction 定義已過期。但不要預設 failure 一定是 Locator 問題。
 
@@ -49,7 +49,7 @@ Inspect all supplied failures. If multiple independent locator drifts have suffi
 ## Repair Scope
 
 - 自動 repair candidates 只能修改 `pages/**/*.py`。
-- 每個 Repair 必須是單一 `old` → `new` 字串替換；`old` 須為 Target Page Object source 中實際存在的完整 literal substring；`new` 為最小必要修改。
+- 每個 Repair 必須是單一 `old` → `new` 字串替換；`old` 須為本次提供的 Relevant Page Object Sources 其中一個檔案內實際存在、且可唯一匹配的完整 literal substring；`new` 為最小必要修改。
 - 不要順便 refactor、rename unrelated code、reorganize Page Object、改 formatting、改其他 locator，或修改 unrelated logic。
 
 ---
