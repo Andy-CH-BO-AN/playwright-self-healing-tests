@@ -188,8 +188,8 @@ jobs:
           set -e
 
           mapfile -t final_markers < <(sed -n 's/^FINAL: //p' "$log_file")
-          if [ "${#final_markers[@]}" -ge 1 ]; then
-            final_marker=${final_markers[-1]}
+          if [ "${#final_markers[@]}" -eq 1 ]; then
+            final_marker=${final_markers[0]}
           else
             final_marker=INVALID
           fi
