@@ -17,56 +17,43 @@ MAX_ROUNDS = 3
 
 
 def main() -> None:
-    initial_evidence_root = _parse_evidence_dir()
-    current_evidence_root = initial_evidence_root
-
     try:
-        for round_number in range(1, MAX_ROUNDS + 1):
-            print(f"\n=== Repair Round {round_number}/{MAX_ROUNDS} ===")
-            contexts = load_failure_contexts(current_evidence_root)
-            if not contexts:
-                print(f"No failure evidence found in {current_evidence_root}.")
-                break
-
-            print(f"Loaded {len(contexts)} failure(s) from {current_evidence_root}.")
-            plan = request_repair_plan(contexts)
-
-            print(f"Received repair plan with {len(plan.repairs)} candidate(s).")
-            applied_count = _apply_safe_candidates(plan.repairs)
-            if applied_count == 0:
-                print("No valid repairs could be applied in this round; stopping loop.")
-                break
-
-            run_static_checks()
-            clear_test_evidence()
-
-            print("Rebuilding Docker image...")
-            if not _run_command(["docker", "compose", "build", "tests"]):
-                fail("Docker build failed after applying repair")
-
-            print("Running full serial E2E test suite...")
-            if _run_full_regression():
-                print("All E2E tests passed!")
-                print("FINAL: REPAIRED")
-                sys.exit(0)
-
-            latest_evidence_root = Path("test-results/self-heal")
-            if not load_failure_contexts(latest_evidence_root):
-                fail("E2E failed but produced no failure evidence")
-
-            print(
-                "E2E tests still have failures; proceeding to next round if available."
-            )
-            current_evidence_root = latest_evidence_root
-
-        if has_valid_page_object_diff():
-            print("FINAL: PARTIAL_REPAIR")
-        else:
-            print("FINAL: CANNOT_REPAIR")
-        sys.exit(0)
-
+        status = run_repair_loop(_parse_evidence_dir())
+        print(f"FINAL: {status}")
     except SelfHealError as e:
         fail(str(e))
+
+
+def run_repair_loop(initial_evidence_root: Path) -> str:
+    current_evidence_root = initial_evidence_root
+
+    for round_number in range(1, MAX_ROUNDS + 1):
+        print(f"\n=== Repair Round {round_number}/{MAX_ROUNDS} ===")
+        contexts = load_failure_contexts(current_evidence_root)
+        if not contexts:
+            print(f"No failure evidence found in {current_evidence_root}.")
+            break
+
+        print(f"Loaded {len(contexts)} failure(s) from {current_evidence_root}.")
+        plan = request_repair_plan(contexts)
+        print(f"Received repair plan with {len(plan.repairs)} candidate(s).")
+
+        if not _apply_safe_candidates(plan.repairs):
+            print("No valid repairs could be applied in this round; stopping loop.")
+            break
+
+        run_static_checks()
+        clear_test_evidence()
+        _rebuild_test_image()
+
+        if _run_full_regression():
+            print("All E2E tests passed!")
+            return "REPAIRED"
+
+        current_evidence_root = _latest_failure_evidence()
+        print("E2E tests still have failures; proceeding to next round if available.")
+
+    return "PARTIAL_REPAIR" if has_valid_page_object_diff() else "CANNOT_REPAIR"
 
 
 def _apply_safe_candidates(repairs: list[RepairCandidate]) -> int:
@@ -85,7 +72,14 @@ def _apply_safe_candidates(repairs: list[RepairCandidate]) -> int:
     return applied_count
 
 
+def _rebuild_test_image() -> None:
+    print("Rebuilding Docker image...")
+    if not _run_command(["docker", "compose", "build", "tests"]):
+        raise SelfHealError("Docker build failed after applying repair")
+
+
 def _run_full_regression() -> bool:
+    print("Running full serial E2E test suite...")
     return _run_command(
         [
             "docker",
@@ -98,6 +92,13 @@ def _run_full_regression() -> bool:
             "chromium",
         ]
     )
+
+
+def _latest_failure_evidence() -> Path:
+    evidence_root = Path("test-results/self-heal")
+    if not load_failure_contexts(evidence_root):
+        raise SelfHealError("E2E failed but produced no failure evidence")
+    return evidence_root
 
 
 def _run_command(cmd: list[str]) -> bool:
@@ -118,7 +119,7 @@ def _parse_evidence_dir() -> Path:
     args = parser.parse_args()
     path = Path(args.evidence)
     if not path.exists():
-        fail(f"Evidence path '{path}' does not exist")
+        raise SelfHealError(f"Evidence path '{path}' does not exist")
     return path
 
 
