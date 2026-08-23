@@ -1,126 +1,189 @@
-# Playwright Self-Healing Tests
+# AI-Assisted Self-Healing Playwright E2E Suite
 
-供維護此測試套件的工程師，以 Python、pytest 與 Playwright 建立可維護的 SauceDemo E2E 測試基礎。
+[繁體中文](README.zh-TW.md) | English
 
-## 技術棧
+An automated, AI-assisted Playwright E2E test maintenance system that detects UI locator drift during scheduled CI runs, proposes scoped Page Object repairs, validates them through full regression testing, and opens a Draft PR for human review.
 
-- Python 3.14
-- pytest、pytest-playwright、pytest-xdist、Playwright Python、python-dotenv
-- Ruff
-- Docker Compose
-- GitHub Actions
+---
 
-## Architecture
+## What Problem Does This Solve?
 
-- pytest-playwright 管理 Chromium、BrowserContext 與 Page 生命週期；每個 testcase 使用獨立 context/page。
-- Page Object 集中頁面 locator 與使用者互動；testcase 保留登入流程與使用者可觀察的 assertion。SauceDemo 的 Products title 使用穩定 `data-test="title"` contract。
-- `config.py` 集中 Base URL 與登入帳密。可用環境變數覆寫；local run 從 `.env` 載入。
-- `.env` 不納入版本控制；`.env.example` 僅提供 credential placeholder，local run 需填入自己的 SauceDemo 帳密。
-- 失敗時保留 full-page screenshot 與 Playwright trace；passing test 不保留這些 artifact。
+UI end-to-end test suites frequently break due to harmless frontend changes—renamed button labels, modified accessible roles, or updated test attributes (locator drift).
+
+Traditionally, an engineer must:
+1. Inspect the CI failure logs and screenshots
+2. Inspect the current page DOM
+3. Locate the corresponding Page Object
+4. Update the locator
+5. Run local and regression tests
+6. Create a Pull Request
+
+This repository automates that maintenance loop while keeping engineers firmly in control through automated regression verification and human-in-the-loop Draft PR reviews. **AI proposes repairs, deterministic code validates safety, full E2E verifies correctness, and humans review and merge.**
+
+---
+
+## Architecture Flow
+
+```mermaid
+flowchart TD
+    A[Scheduled E2E Failure] --> B[Capture Failure Evidence\nJSON + DOM + Test Source]
+    B --> C[Discover Relevant Page Objects\nTraceback + Test AST Imports]
+    C --> D[AI Diagnosis & Repair Proposal\nGemini Structured Output]
+    D --> E[Mechanical Safety Validation\nScope strictly pages/**/*.py]
+    E --> F[Full Serial E2E Regression\nin Docker Container]
+    F -->|Still Failing & Round < 3| B
+    F --> G{Outcome Classification}
+    D -->|Invalid / No Proposal| G
+    G -->|All Tests Passed| H[REPAIRED\nPublish Draft PR]
+    G -->|Unresolved with Progress| I[PARTIAL_REPAIR\nDraft PR + Human Handoff]
+    G -->|No Valid Candidates| J[CANNOT_REPAIR\nNo PR Created]
+    G -->|Fatal Error / Broken Evidence| K[REPAIR_FAILED\nWorkflow Failure]
+    H --> L[Human Review & Merge]
+    I --> L
+```
+
+> **Summary**: When scheduled E2E tests fail, failure evidence and AST-discovered Page Objects are gathered into diagnosis context. The AI proposes minimal locator candidates, mechanical safety checks validate the patches, full containerized E2E regression verifies the changes (retrying up to 3 rounds with fresh evidence), and the outcome is classified to publish a Draft PR for human review.
+
+---
+
+## Key Design Decisions
+
+### 1. Dual Page Object Discovery (AST + Traceback)
+Locator drift often causes assertions to fail in the test file rather than inside a Page Object method. If diagnosis context only examined traceback frames, Page Objects used later in the test flow would be missing.
+
+The discovery engine unions two sources:
+- **Traceback frames**: Page Objects directly involved in the exception.
+- **AST imports**: All `pages.*` modules directly imported by the failing test file.
+
+This ensures multi-step flows (e.g., Round 1 repairs Login, Round 2 encounters an assertion failure on Cart) have full Page Object context available.
+
+### 2. Partial Repair as Human Handoff
+`PARTIAL_REPAIR` is an intentional human-in-the-loop feature, not a failure.
+
+When AI successfully repairs initial locator failures (e.g., login button) but encounters a complex or non-locator issue downstream, the system does **not** roll back valid work. Instead, it creates a Partial Draft PR preserving the safe, verified progress, allowing the engineer to continue from an advanced state rather than debugging from scratch.
+
+### 3. Iterative Multi-Round Repair
+Failure cascades are common in E2E tests: fixing an early step reveals downstream changes. The system runs up to **3 iterative rounds**, capturing fresh DOM and failure evidence after each round's regression run.
+
+---
+
+## Mechanical Safety Boundaries
+
+AI is treated as an untrusted proposal engine. Multiple deterministic gates enforce repository safety:
+
+- **Strict File Scope**: Repairs are strictly confined to `pages/**/*.py`. Modifications to `tests/**`, configuration, or CI files are immediately rejected.
+- **Exact Literal Replacement**: Every candidate must match an exact, unique substring in the target file.
+- **Checked-Out Commit Pinning**: The self-heal workflow checks out the exact commit SHA that failed in the scheduled monitor.
+- **Static Quality Checks**: Patches must pass `ruff check`, `ruff format --check`, `git diff --check`, and produce zero untracked files.
+- **Full Containerized Regression**: Every repair must be verified by a clean `docker compose run` serial E2E run.
+- **Least-Privilege CI Permissions**: The self-heal workflow runs with read-only permissions; PR creation credentials are scoped exclusively to the final publication step.
+- **No Automatic Merging**: All repairs are submitted as **Draft PRs** requiring human review and approval.
+
+---
 
 ## Project Structure
 
 ```text
-config.py
-pages/
-  authentication/login_page.py
-  cart/cart_page.py
-  checkout/
-    checkout_complete_page.py
-    checkout_information_page.py
-    checkout_overview_page.py
-  inventory/
-    inventory_page.py
-    product_detail_page.py
-tests/
-  conftest.py
-  authentication/test_login.py
-  cart/test_cart.py
-  checkout/test_checkout.py
-  inventory/test_product_details.py
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                 # PR & push regression check
+│       ├── nightly.yml            # Scheduled E2E monitor
+│       └── self-heal.yml          # Automated self-healing & Draft PR workflow
+├── ai/
+│   ├── agent-instructions/        # Specialized AI instructions
+│   └── prompts/
+│       └── locator-repair.md      # Structured repair prompt template
+├── pages/                         # Page Object Models (repair scope)
+│   ├── authentication/
+│   ├── cart/
+│   ├── checkout/
+│   └── inventory/
+├── scripts/
+│   └── self-heal/
+│       ├── check-duplicate-pr.sh  # Cross-run fingerprint deduplication
+│       └── publish-draft-pr.sh    # Draft PR publisher with human review checklist
+├── self_heal/                     # Core self-healing engine
+│   ├── __init__.py                # SelfHealError definition
+│   ├── agent.py                   # AI prompt assembly & Gemini structured repair
+│   ├── evidence.py                # Failure context & AST Page Object discovery
+│   └── safety.py                  # Candidate validation & mechanical safety checks
+├── tests/                         # Playwright E2E test suite
+├── tools/
+│   └── self_heal.py               # Repair loop CLI entry point
+├── Dockerfile
+├── compose.yaml
+├── config.py
+└── requirements.txt
 ```
 
-## Local Setup
+---
+
+## Tech Stack
+
+- **Testing**: Python 3.14, Playwright, pytest, pytest-playwright, pytest-xdist
+- **AI / Self-Healing**: Google GenAI SDK (Gemini, configurable via `SELF_HEAL_MODEL`), Pydantic v2
+- **Code Quality**: Ruff
+- **Container & CI**: Docker Compose, GitHub Actions
+
+---
+
+## Local Setup & Execution
+
+### Prerequisites & Setup
 
 ```bash
 python3.14 -m venv .venv
 source .venv/bin/activate
 cp .env.example .env
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r requirements-self-heal.txt
 python -m playwright install chromium
 ```
 
-建立 `.env` 後，將 `SAUCEDEMO_USERNAME` 與 `SAUCEDEMO_PASSWORD` placeholder 改成自己的測試帳密。
+Configure `SAUCEDEMO_USERNAME`, `SAUCEDEMO_PASSWORD`, and `GEMINI_API_KEY` in `.env`.
 
-## Run Tests
-
-### Native Local Debug
-
-本機環境快速開發與逐步除錯：
+### Running Tests Locally
 
 ```bash
+# Static checks
 ruff check .
 ruff format --check .
+
+# Serial execution (default)
 pytest --browser chromium
-```
 
-或以 2 workers 本機平行執行：
-
-```bash
+# Parallel execution (2 workers)
 pytest --browser chromium -n 2
 ```
 
-- 平行執行透過 `pytest-xdist` 分派至 2 個 worker processes。
-- 每個 testcase 維持獨立 `BrowserContext` 與 Page 生命週期，確保 shopping cart 與 session state 互相隔離。
-- 未指定 `-n` 時預設為 serial execution，便於 local 逐步除錯與單一測試執行。
-
-若需測試其他部署環境：
+### Reproducible Container Execution
 
 ```bash
-BASE_URL=https://www.saucedemo.com pytest --browser chromium -n 2
-```
-
-## Reproducible Container Execution
-
-Docker 作為此測試套件的 canonical reproducible execution environment。Container 內已包含完整的 source code 與 Playwright 執行環境，不依賴 host source bind mount。
-
-### Build Image
-
-```bash
+# Build test container
 docker compose build tests
-```
 
-### Run Suite in Container
-
-```bash
+# Run full E2E suite in container
 docker compose run --rm tests
 ```
 
-- Container 預設以 2 workers 平行執行完整 suite (`pytest --browser chromium -n 2`)。
-- 程式碼修改後需透過 `docker compose build tests` 重新打包進 image。
-- 僅 `./test-results` 掛載至 host，確保測試失敗時的 screenshot 與 trace 能正常輸出至本機。
-- 執行 Ruff 檢查：
-  ```bash
-  docker compose run --rm tests ruff check .
-  docker compose run --rm tests ruff format --check .
-  ```
+### Running Self-Heal Locally
 
-## GitHub Actions
+```bash
+# Run self-heal repair loop on captured failure evidence
+python -m tools.self_heal --evidence test-results/self-heal
+```
 
-Pull request 與 main branch push 均在 `ubuntu-24.04` runner 上以 Docker 容器化流程執行，與 local container 執行路徑完全一致：
-
-1. 建置 repository Docker image (`docker compose build tests`)。
-2. 在 container 內執行 Ruff 語法與排版檢查。
-3. 在 container 內以 2 workers 平行執行完整 Playwright E2E suite (`pytest --browser chromium -n 2`)。
-4. 測試失敗時，透過 volume mount 持久化至 runner 的 `test-results/` 並自動上傳為 artifact。
-5. GitHub Actions workflow 的 action dependencies (`actions/checkout`, `actions/upload-artifact`) 皆以 full commit SHA 固定，強化供應鏈安全。
+---
 
 ## Roadmap
 
-- [x] Phase 1 — Framework + Login happy path
-- [x] Phase 2 — Core E2E scenarios
-- [x] Phase 3 — Parallel execution
-- [x] Phase 4 — Docker / CI hardening
-- [ ] Phase 5 — AI-assisted self-healing + Draft PR automation
-
+- [x] **Phase 1** — Framework + Login happy path baseline
+- [x] **Phase 2** — Core E2E scenarios (cart, inventory, multi-step checkout)
+- [x] **Phase 3** — Parallel execution with worker session isolation (`pytest-xdist`)
+- [x] **Phase 4** — Docker containerization & CI hardening
+- [x] **Phase 5** — AI-assisted locator repair (Gemini diagnosis + structured output)
+- [x] **Phase 6** — Iterative Multi-Failure Self-Healing & Draft PR Automation
+  - Cross-run fingerprint deduplication (`scripts/self-heal/check-duplicate-pr.sh`)
+  - AST-based Page Object discovery for assertion failures
+  - Multi-round iterative repair loop with fresh evidence
+  - Safe partial repair human handoff mechanism
