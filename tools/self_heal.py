@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 MAX_ROUNDS = 3
 
@@ -20,7 +20,7 @@ class RepairDecision(BaseModel):
     old: str
     new: str
     reason: str
-    confidence: int
+    confidence: int = Field(ge=1, le=100)
 
 
 class RepairPlan(BaseModel):
@@ -86,8 +86,12 @@ def main() -> None:
             print("FINAL: REPAIRED")
             sys.exit(0)
 
+        latest_evidence_root = Path("test-results/self-heal")
+        if not _find_failure_dirs(latest_evidence_root):
+            fail("E2E failed but produced no failure evidence")
+
         print("E2E tests still have failures; proceeding to next round if available.")
-        current_evidence_root = Path("test-results/self-heal")
+        current_evidence_root = latest_evidence_root
 
     if _has_valid_page_object_diff():
         print("FINAL: PARTIAL_REPAIR")
