@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Find failure artifact
+      - name: Find nightly failure artifact
         id: artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,7 +63,7 @@ jobs:
 
           echo "available=true" >> "$GITHUB_OUTPUT"
 
-      - name: Download failure artifact
+      - name: Download failure evidence
         if: steps.artifact.outputs.available == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -73,7 +73,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
 
-      - name: Select failure evidence
+      - name: Confirm usable failure evidence
         id: evidence
         if: steps.artifact.outputs.available == 'true'
         env:
@@ -99,63 +99,20 @@ jobs:
           echo "available=true" >> "$GITHUB_OUTPUT"
           echo "evidence_root=${EVIDENCE_ROOT}" >> "$GITHUB_OUTPUT"
 
-      - name: Check existing open repair PR
+      - name: Checkout tested commit
+        if: steps.evidence.outputs.available == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Skip duplicate repair work
         id: dedupe
         if: steps.evidence.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           EVIDENCE_ROOT: ${{ steps.evidence.outputs.evidence_root }}
-        run: |
-          set -euo pipefail
-
-          open_pr_bodies=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --limit 100 \
-            --json url,body,headRefName,isCrossRepository \
-            | jq -c '
-              [ .[] | select(
-                  (.isCrossRepository == false) and
-                  ((.headRefName // "") | startswith("fix/self-heal-"))
-                ) | {url: .url, body: (.body // "")} ]
-            ')
-
-          mapfile -d '' evidence_files < <(
-            find "$EVIDENCE_ROOT" -type f -name failure.json -print0
-          )
-
-          fingerprints=()
-          for file in "${evidence_files[@]}"; do
-            fingerprint_input=$(jq -c \
-              '[.nodeid // "", .error_type // "", .error_message // ""]' \
-              "$file")
-            fp=$(printf '%s' "$fingerprint_input" | sha256sum | cut -d' ' -f1)
-            fingerprints+=("$fp")
-
-            marker="<!-- self-heal-fingerprint: ${fp} -->"
-            matching_pr=$(echo "$open_pr_bodies" | jq -r --arg marker "$marker" '
-              .[] | select(.body | contains($marker)) | .url
-            ' | head -n 1)
-
-            if [ -n "$matching_pr" ]; then
-              echo "should_repair=false" >> "$GITHUB_OUTPUT"
-              {
-                echo "## AI Self-Heal"
-                echo "Existing repair PR already handles failure (${fp}): ${matching_pr}"
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-          done
-
-          echo "should_repair=true" >> "$GITHUB_OUTPUT"
-          echo "fingerprints=${fingerprints[*]}" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout tested commit
-        if: steps.dedupe.outputs.should_repair == 'true'
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
+        run: bash scripts/self-heal/check-duplicate-pr.sh
 
       - name: Set up Python
         if: steps.dedupe.outputs.should_repair == 'true'
@@ -170,7 +127,7 @@ jobs:
           -r requirements.txt
           -r requirements-self-heal.txt
 
-      - name: Run self-heal
+      - name: Run iterative AI repair
         id: self_heal
         if: steps.dedupe.outputs.should_repair == 'true'
         env:
@@ -278,7 +235,7 @@ jobs:
               ;;
           esac
 
-      - name: Commit repair and create Draft PR
+      - name: Publish human-review Draft PR
         if: steps.outcome.outputs.pr_ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.SELF_HEAL_PR_TOKEN }}
@@ -289,103 +246,4 @@ jobs:
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
           SOURCE_RUN_URL: ${{ github.event.workflow_run.html_url }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-
-          branch="fix/self-heal-${SOURCE_RUN_ID}"
-          existing_pr=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --head "$branch" \
-            --state all \
-            --limit 1 \
-            --json url \
-            --jq '.[0].url // ""')
-
-          if [ -n "$existing_pr" ]; then
-            {
-              echo "## AI Self-Heal"
-              echo "A pull request already exists for Scheduled E2E run ${SOURCE_RUN_ID}: ${existing_pr}"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          gh auth setup-git
-          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null; then
-            {
-              echo "## AI Self-Heal"
-              echo "Branch ${branch} already exists without a pull request; refusing to overwrite it."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
-          mapfile -d '' failure_files < <(
-            find "$EVIDENCE_ROOT" -type f -name failure.json -print0
-          )
-          source_failures=()
-          for f in "${failure_files[@]}"; do
-            nodeid=$(jq -r '.nodeid // ""' "$f")
-            if [ -n "$nodeid" ]; then
-              source_failures+=("- \`${nodeid}\`")
-            fi
-          done
-
-          diff_stat=$(git diff --stat)
-          pr_body="$RUNNER_TEMP/self-heal-pr.md"
-
-          {
-            for fp in $FINGERPRINTS; do
-              echo "<!-- self-heal-fingerprint: ${fp} -->"
-            done
-            echo "## Summary"
-            echo "Automated locator repair for failure(s) detected by the Scheduled E2E Monitor."
-            echo
-            echo "## Repair status"
-            if [ "$REPAIR_STATUS" = "REPAIRED" ]; then
-              echo "Complete repair — all E2E tests passed."
-            else
-              echo "Partial repair — human follow-up required (some E2E failures remain after repair rounds)."
-            fi
-            echo
-            echo "## Source failure(s)"
-            echo "- Scheduled run: [${SOURCE_RUN_ID}](${SOURCE_RUN_URL})"
-            echo "- Tested commit: \`${SOURCE_SHA}\`"
-            if [ "${#source_failures[@]}" -gt 0 ]; then
-              echo "- Failing testcase(s):"
-              for sf in "${source_failures[@]}"; do
-                echo "  ${sf}"
-              done
-            fi
-            echo
-            echo "## Changes"
-            echo '```text'
-            printf '%s\n' "$diff_stat"
-            echo '```'
-            echo
-            echo "## Validation"
-            echo "The self-heal validation sequence was run before this commit was created."
-            echo
-            echo "Human review is required. This Draft PR will not be approved or merged automatically."
-          } > "$pr_body"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git add pages/
-          git commit \
-            -m "FIX: repair locator drift from nightly run ${SOURCE_RUN_ID}" \
-            -m "Repair locator failure(s) detected by Scheduled E2E run ${SOURCE_RUN_ID} at ${SOURCE_SHA}." \
-            -m "Status: ${REPAIR_STATUS}. The self-heal validation sequence was run before this commit was created."
-
-          git push origin "HEAD:refs/heads/${branch}"
-          pr_url=$(gh pr create \
-            --repo "$GITHUB_REPOSITORY" \
-            --base "$DEFAULT_BRANCH" \
-            --head "$branch" \
-            --draft \
-            --title "FIX: repair locator drift from nightly run ${SOURCE_RUN_ID}" \
-            --body-file "$pr_body")
-
-          {
-            echo "## AI Self-Heal"
-            echo "Created Draft PR (${REPAIR_STATUS}): ${pr_url}"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: bash scripts/self-heal/publish-draft-pr.sh
