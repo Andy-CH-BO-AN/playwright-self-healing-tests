@@ -26,21 +26,18 @@ UI 端到端（E2E）自動化測試常因前端非破壞性變更（按鈕文�
 
 ```mermaid
 flowchart TD
-    A[定期 E2E 監控失敗] --> B[擷取失敗證據\nJSON + DOM + Traceback]
-    B --> C[探索相關 Page Objects\nTraceback + 失敗測試 AST 引用]
-    C --> D[AI 診斷與修復提案\nGemini 結構化輸出]
-    D --> E[機械式安全邊界驗證\n嚴格限定 pages/**/*.py]
-    E --> F[容器內完整循序 E2E 迴歸測試]
-    F -->|仍有失敗且未滿 3 輪| B
-    F -->|全部通過| G[完整修復\nFINAL: REPAIRED]
-    F -->|未完全修復但已有安全進展| H[局部修復\nFINAL: PARTIAL_REPAIR]
-    F -->|無有效修復候選| I[無法修復\nFINAL: CANNOT_REPAIR]
-    G --> J[建立 Draft PR]
-    H --> J[建立 Draft PR\n人工接手]
-    J --> K[人類工程師審查與合併]
+    A[定期 E2E 監控失敗] --> B[失敗證據與 AST 上下文\nJSON + DOM + Page Objects]
+    B --> C[AI 迭代修復迴圈\n最多執行 3 輪]
+    C --> D{結果判定分類}
+    D -->|測試全數通過| E[REPAIRED\n發布 Draft PR]
+    D -->|未完全修復但已有進展| F[PARTIAL_REPAIR\nDraft PR + 人工接手]
+    D -->|無有效修復候選| G[CANNOT_REPAIR\n不建立 PR]
+    D -->|異常 / 證據損毀| H[REPAIR_FAILED\nWorkflow 失敗中斷]
+    E --> I[人類工程師審查與合併]
+    F --> I
 ```
 
-> **摘要**：當定期 E2E 測試失敗時，系統彙整失敗證據與透過 AST 探索出的 Page Object 作為診斷上下文；AI 提出最小 locator 修復候選，經由機械式安全邊界套用後，於 Docker 容器內執行完整循序迴歸測試（最多以最新證據迭代 3 輪），最終發布 Draft PR 供工程師審查。
+> **摘要**：當定期 E2E 測試失敗時，系統彙整失敗證據與透過 AST 探索出的 Page Object 作為診斷上下文。系統執行 AI 迭代修復迴圈（最多以最新證據迭代 3 輪），判定分類結果，並在具備安全修復時發布 Draft PR 供工程師審查。
 
 ---
 
@@ -119,7 +116,7 @@ AI 被視為不受信任的提案引擎。系統透過多道確定性關卡確�
 ## 技術棧
 
 - **測試框架**：Python 3.14, Playwright, pytest, pytest-playwright, pytest-xdist
-- **AI / 自我修復**：Google GenAI SDK (Gemini 2.5 Flash Lite), Pydantic v2
+- **AI / 自我修復**：Google GenAI SDK (Gemini，可透過 `SELF_HEAL_MODEL` 設定), Pydantic v2
 - **程式碼品質**：Ruff
 - **容器與 CI**：Docker Compose, GitHub Actions
 
@@ -168,7 +165,7 @@ docker compose run --rm tests
 
 ```bash
 # 針對現有的失敗證據執行自我修復迴圈
-python tools/self_heal.py --evidence test-results/self-heal
+python -m tools.self_heal --evidence test-results/self-heal
 ```
 
 ---

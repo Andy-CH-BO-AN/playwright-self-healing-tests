@@ -26,21 +26,18 @@ This repository automates that maintenance loop while keeping engineers firmly i
 
 ```mermaid
 flowchart TD
-    A[Scheduled E2E Monitor Failure] --> B[Capture Failure Evidence\nJSON + DOM + Traceback]
-    B --> C[Discover Relevant Page Objects\nTraceback + Failing Test AST Imports]
-    C --> D[AI Diagnosis & Repair Proposal\nGemini Structured Output]
-    D --> E[Mechanical Safety Validation\nScope strictly pages/**/*.py]
-    E --> F[Full Serial E2E Regression in Container]
-    F -->|Still Failing & Round < 3| B
-    F -->|All Passed| G[Complete Repair\nFINAL: REPAIRED]
-    F -->|Unresolved & Progress Made| H[Partial Repair\nFINAL: PARTIAL_REPAIR]
-    F -->|No Valid Candidates| I[Cannot Repair\nFINAL: CANNOT_REPAIR]
-    G --> J[Publish Draft PR]
-    H --> J[Publish Draft PR\nHuman Handoff]
-    J --> K[Human Review & Merge]
+    A[Scheduled E2E Failure] --> B[Failure Evidence & AST Context\nJSON + DOM + Page Objects]
+    B --> C[AI Repair Loop\nUp to 3 Iterative Rounds]
+    C --> D{Outcome Classification}
+    D -->|All Tests Passed| E[REPAIRED\nPublish Draft PR]
+    D -->|Unresolved with Progress| F[PARTIAL_REPAIR\nDraft PR + Human Handoff]
+    D -->|No Valid Candidates| G[CANNOT_REPAIR\nNo PR Created]
+    D -->|Error / Broken Evidence| H[REPAIR_FAILED\nWorkflow Failure]
+    E --> I[Human Review & Merge]
+    F --> I
 ```
 
-> **Summary**: When scheduled E2E tests fail, failure evidence and AST-discovered Page Objects are gathered into diagnosis context. The AI proposes minimal locator candidates, mechanical safety checks apply the patches, full containerized E2E regression verifies the changes (retrying up to 3 rounds with fresh evidence), and a Draft PR is published for final human review.
+> **Summary**: When scheduled E2E tests fail, failure evidence and AST-discovered Page Objects are gathered into diagnosis context. The system runs an iterative AI repair loop (up to 3 rounds with fresh evidence), classifies the outcome, and publishes a Draft PR when safe repairs are available for human review.
 
 ---
 
@@ -119,7 +116,7 @@ AI is treated as an untrusted proposal engine. Multiple deterministic gates enfo
 ## Tech Stack
 
 - **Testing**: Python 3.14, Playwright, pytest, pytest-playwright, pytest-xdist
-- **AI / Self-Healing**: Google GenAI SDK (Gemini 2.5 Flash Lite), Pydantic v2
+- **AI / Self-Healing**: Google GenAI SDK (Gemini, configurable via `SELF_HEAL_MODEL`), Pydantic v2
 - **Code Quality**: Ruff
 - **Container & CI**: Docker Compose, GitHub Actions
 
@@ -168,7 +165,7 @@ docker compose run --rm tests
 
 ```bash
 # Run self-heal repair loop on captured failure evidence
-python tools/self_heal.py --evidence test-results/self-heal
+python -m tools.self_heal --evidence test-results/self-heal
 ```
 
 ---

@@ -3,17 +3,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-_repo_root = Path(__file__).resolve().parent.parent
-if str(_repo_root) not in sys.path:
-    sys.path.insert(0, str(_repo_root))
-_tools_dir = str(Path(__file__).resolve().parent)
-if sys.path and sys.path[0] == _tools_dir:
-    sys.path.pop(0)
-
-from self_heal import SelfHealError  # noqa: E402
-from self_heal.agent import RepairCandidate, request_repair_plan  # noqa: E402
-from self_heal.evidence import clear_test_evidence, load_failure_contexts  # noqa: E402
-from self_heal.safety import (  # noqa: E402
+from self_heal import SelfHealError
+from self_heal.agent import RepairCandidate, request_repair_plan
+from self_heal.evidence import clear_test_evidence, load_failure_contexts
+from self_heal.safety import (
     apply_patch,
     has_valid_page_object_diff,
     run_static_checks,

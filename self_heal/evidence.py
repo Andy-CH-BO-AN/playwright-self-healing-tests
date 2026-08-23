@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from self_heal import SelfHealError
+
 
 @dataclass(frozen=True)
 class FailureContext:
@@ -28,8 +30,10 @@ def load_failure_contexts(evidence_root: Path) -> list[FailureContext]:
 
         try:
             failure_data = json.loads(failure_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+        except Exception as e:
+            raise SelfHealError(
+                f"Malformed failure evidence in '{failure_file}': {e}"
+            ) from e
 
         nodeid = failure_data.get("nodeid", "")
         traceback_text = failure_data.get("traceback", "")
