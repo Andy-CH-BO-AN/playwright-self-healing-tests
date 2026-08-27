@@ -147,8 +147,8 @@ Configure `SAUCEDEMO_USERNAME`, `SAUCEDEMO_PASSWORD`, and `GEMINI_API_KEY` in `.
 To enable automated self-healing in GitHub Actions:
 - **Repository Secrets**: Configure `SAUCEDEMO_USERNAME`, `SAUCEDEMO_PASSWORD`, and `GEMINI_API_KEY`.
 - **Workflow Permissions**: In repository **Settings → Actions → General → Workflow permissions**:
-  - Select **"Read and write permissions"** (or workflow-level permissions).
-  - Ensure **"Allow GitHub Actions to create and approve pull requests"** is checked.
+  - Keep default permissions read-only; the self-heal workflow explicitly requests only required permissions (`actions: read`, `contents: write`, `pull-requests: write`).
+  - Ensure **"Allow GitHub Actions to create and approve pull requests"** is checked (subject to organization policy).
 - No Personal Access Token (`PAT`) or external GitHub App is required; the workflow uses the repository-native `GITHUB_TOKEN`.
 
 ### Running Tests Locally

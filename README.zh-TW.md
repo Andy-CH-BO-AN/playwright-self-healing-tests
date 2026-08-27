@@ -147,8 +147,8 @@ python -m playwright install chromium
 若要在 GitHub Actions 中啟用自動自我修復：
 - **Repository Secrets**：設定 `SAUCEDEMO_USERNAME`、`SAUCEDEMO_PASSWORD` 與 `GEMINI_API_KEY`。
 - **Workflow 權限設定**：至 **Settings → Actions → General → Workflow permissions**：
-  - 選擇 **"Read and write permissions"**（或由 workflow 宣告最小權限）。
-  - 確認勾選 **"Allow GitHub Actions to create and approve pull requests"**。
+  - 建議保持預設唯讀權限；自我修復 workflow 已於 YAML 內顯式宣告所需最小權限（`actions: read`、`contents: write`、`pull-requests: write`）。
+  - 確認勾選 **"Allow GitHub Actions to create and approve pull requests"**（依組織權限政策而定）。
 - 無需設定任何個人存取權杖（PAT）或 GitHub App，workflow 會直接使用 GitHub Actions runtime 提供的內建 `GITHUB_TOKEN`。
 
 ### 執行測試
