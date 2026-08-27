@@ -6,7 +6,7 @@ class CartItem:
         self.root: Locator = locator
         self.name: Locator = locator.locator("[data-test='inventory-item-name']")
         self.description: Locator = locator.locator("[data-test='inventory-item-desc']")
-        self.price: Locator = locator.locator("[data-test='inventory-item-price']")
+        self.price: Locator = locator.locator("[data-test='inventory-item-cost']")
         self.quantity: Locator = locator.locator("[data-test='item-quantity']")
         self.remove_button: Locator = locator.get_by_role("button", name="Remove")
 
