@@ -76,8 +76,8 @@ AI 被視為不受信任的提案引擎。系統透過多道確定性關卡確�
 - **鎖定失敗當下 Commit**：自我修復 workflow 嚴格 checkout 定期監控失敗時的 exact commit SHA。
 - **靜態品質檢查**：修復後必須通過 `ruff check`、`ruff format --check`、`git diff --check`，且不可產生任何 untracked 檔案。
 - **容器化完整迴歸**：每次修復必須經由純淨的 `docker compose run` 循序 E2E 測試驗證。
-- **最小權限 CI 設計**：workflow 全程以唯讀權限執行，僅在最後發布 Draft PR 時使用具備 PR 寫入權限的 Token。
-- **永不自動合併**：所有修復皆以 **Draft PR** 形式提出，必須由人類工程師進行 Review 與 Approval。
+- **最小權限 CI 設計**：自我修復 workflow 採用 GitHub Actions 內建的 `GITHUB_TOKEN`，並遵循最小權限原則（`contents: write`、`pull-requests: write`、`actions: read`），完全無需設定個人存取權杖（PAT）或額外的 GitHub App。
+- **永不自動合併且需人工審查**：所有修復皆以 **Draft PR** 形式提出，必須由人類工程師進行 Review 與 Approval。自我修復流程在建立 Draft PR 之前已完成靜態檢查與完整 E2E 迴歸驗證。由於 PR 是透過 GitHub Actions 的 repository token 建立，GitHub 可能需要維護者手動核准（approve）才會觸發 PR CI 流程。
 
 ---
 
@@ -127,9 +127,9 @@ AI 被視為不受信任的提案引擎。系統透過多道確定性關卡確�
 
 ---
 
-## 本機設定與執行
+## 設定與執行
 
-### 環境建置
+### 環境建置與本機設定
 
 ```bash
 python3.14 -m venv .venv
@@ -141,6 +141,15 @@ python -m playwright install chromium
 ```
 
 於 `.env` 中設定 `SAUCEDEMO_USERNAME`、`SAUCEDEMO_PASSWORD` 與 `GEMINI_API_KEY`。
+
+### GitHub Actions 設定
+
+若要在 GitHub Actions 中啟用自動自我修復：
+- **Repository Secrets**：設定 `SAUCEDEMO_USERNAME`、`SAUCEDEMO_PASSWORD` 與 `GEMINI_API_KEY`。
+- **Workflow 權限設定**：至 **Settings → Actions → General → Workflow permissions**：
+  - 建議保持預設唯讀權限；自我修復 workflow 已於 YAML 內顯式宣告所需最小權限（`actions: read`、`contents: write`、`pull-requests: write`）。
+  - 確認勾選 **"Allow GitHub Actions to create and approve pull requests"**（依組織權限政策而定）。
+- 無需設定任何個人存取權杖（PAT）或 GitHub App，workflow 會直接使用 GitHub Actions runtime 提供的內建 `GITHUB_TOKEN`。
 
 ### 執行測試
 

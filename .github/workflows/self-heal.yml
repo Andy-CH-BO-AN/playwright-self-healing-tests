@@ -9,8 +9,8 @@ on:
 
 permissions:
   actions: read
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: self-heal-${{ github.event.workflow_run.id }}
@@ -238,7 +238,7 @@ jobs:
       - name: Publish human-review Draft PR
         if: steps.outcome.outputs.pr_ready == 'true'
         env:
-          GH_TOKEN: ${{ secrets.SELF_HEAL_PR_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EVIDENCE_ROOT: ${{ steps.evidence.outputs.evidence_root }}
           FINGERPRINTS: ${{ steps.dedupe.outputs.fingerprints }}

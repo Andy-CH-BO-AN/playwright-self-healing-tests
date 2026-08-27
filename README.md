@@ -76,8 +76,8 @@ AI is treated as an untrusted proposal engine. Multiple deterministic gates enfo
 - **Checked-Out Commit Pinning**: The self-heal workflow checks out the exact commit SHA that failed in the scheduled monitor.
 - **Static Quality Checks**: Patches must pass `ruff check`, `ruff format --check`, `git diff --check`, and produce zero untracked files.
 - **Full Containerized Regression**: Every repair must be verified by a clean `docker compose run` serial E2E run.
-- **Least-Privilege CI Permissions**: The self-heal workflow runs with read-only permissions; PR creation credentials are scoped exclusively to the final publication step.
-- **No Automatic Merging**: All repairs are submitted as **Draft PRs** requiring human review and approval.
+- **Least-Privilege CI Permissions**: The self-heal workflow uses GitHub Actions built-in `GITHUB_TOKEN` with least-privilege permissions (`contents: write`, `pull-requests: write`, `actions: read`). No personal access tokens (PAT) or external GitHub Apps are required.
+- **No Automatic Merging & Human Review Required**: All repairs are submitted as **Draft PRs** requiring human review and approval. Self-Heal validates the repair before opening a Draft PR. Because the PR is created using GitHub Actions' repository token, GitHub may require a maintainer to approve the PR workflow before CI runs. Human review and merge remain mandatory.
 
 ---
 
@@ -127,9 +127,9 @@ AI is treated as an untrusted proposal engine. Multiple deterministic gates enfo
 
 ---
 
-## Local Setup & Execution
+## Setup & Execution
 
-### Prerequisites & Setup
+### Prerequisites & Local Setup
 
 ```bash
 python3.14 -m venv .venv
@@ -141,6 +141,15 @@ python -m playwright install chromium
 ```
 
 Configure `SAUCEDEMO_USERNAME`, `SAUCEDEMO_PASSWORD`, and `GEMINI_API_KEY` in `.env`.
+
+### GitHub Actions Configuration
+
+To enable automated self-healing in GitHub Actions:
+- **Repository Secrets**: Configure `SAUCEDEMO_USERNAME`, `SAUCEDEMO_PASSWORD`, and `GEMINI_API_KEY`.
+- **Workflow Permissions**: In repository **Settings → Actions → General → Workflow permissions**:
+  - Keep default permissions read-only; the self-heal workflow explicitly requests only required permissions (`actions: read`, `contents: write`, `pull-requests: write`).
+  - Ensure **"Allow GitHub Actions to create and approve pull requests"** is checked (subject to organization policy).
+- No Personal Access Token (`PAT`) or external GitHub App is required; the workflow uses the repository-native `GITHUB_TOKEN`.
 
 ### Running Tests Locally
 
