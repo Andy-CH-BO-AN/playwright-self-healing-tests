@@ -79,7 +79,7 @@ def _rebuild_test_image() -> None:
 
 
 def _run_full_regression() -> bool:
-    print("Running full serial E2E test suite...")
+    print("Running full parallel E2E test suite...")
     return _run_command(
         [
             "docker",
@@ -90,6 +90,8 @@ def _run_full_regression() -> bool:
             "pytest",
             "--browser",
             "chromium",
+            "-n",
+            "2",
         ]
     )
 
