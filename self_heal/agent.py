@@ -82,7 +82,13 @@ def request_repair_plan(contexts: list[FailureContext]) -> RepairPlan:
 
     print(f"Calling Gemini model '{model_name}' for failure diagnosis...")
     try:
-        client = genai.Client(api_key=api_key)
+        http_options = types.HttpOptions(
+            retry_options=types.HttpRetryOptions(
+                attempts=3,
+                http_status_codes=[429, 500, 502, 503, 504],
+            )
+        )
+        client = genai.Client(api_key=api_key, http_options=http_options)
         response = client.models.generate_content(
             model=model_name,
             contents=user_prompt,
