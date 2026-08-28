@@ -20,13 +20,13 @@ jobs:
           persist-credentials: false
       - name: Build Docker image
         run: docker compose build tests
-      - name: Run serial E2E monitor
+      - name: Run parallel E2E monitor
         env:
           SAUCEDEMO_USERNAME: ${{ secrets.SAUCEDEMO_USERNAME }}
           SAUCEDEMO_PASSWORD: ${{ secrets.SAUCEDEMO_PASSWORD }}
         run: >-
           docker compose run --rm tests
-          pytest --browser chromium
+          pytest --browser chromium -n 2
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
