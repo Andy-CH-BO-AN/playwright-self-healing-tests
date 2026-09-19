@@ -7,9 +7,7 @@ class ProductDetailPage:
         self.name: Locator = page.locator(".inventory_details_name")
         self.description: Locator = page.locator("[data-test='inventory-item-desc']")
         self.price: Locator = page.locator("[data-test='inventory-item-price']")
-        self.add_to_cart_button: Locator = page.get_by_role(
-            "button", name="Add to cart"
-        )
+        self.add_to_cart_button: Locator = page.locator("[data-test='add-to-cart']")
         self.shopping_cart_link: Locator = page.locator(
             "[data-test='shopping-cart-link']"
         )
